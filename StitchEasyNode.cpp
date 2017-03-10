@@ -247,25 +247,22 @@ MStatus StitchEasyNode::compute(const MPlug &plug, MDataBlock &datablock) {
 	if (plug != aOutMesh)
 		return MS::kUnknownParameter;
 
-	if (m_dirtySourceMesh) {
+	if (m_dirtySourceMesh || m_sourceMesh.isNull()) {
 		MObject sourceMesh = datablock.inputValue(aInMesh).asMesh();
 		if (m_sourceMesh.isNull() || !SMesh::isEquivalent(sourceMesh, m_sourceMesh))
 			m_dirtyBaseMesh = true;
 		m_sourceMesh = sourceMesh;
 	}
-	if (m_dirtyComponent) {
+	if (m_dirtyComponent || m_component.isNull()) {
 		m_dirtyBaseMesh = true;
 		m_dirtyComponent = false;
 		MObject stichLineData = datablock.inputValue(aStitchLines).data();
 		MFnComponentListData compListData(stichLineData, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
-		if(!compListData[0].isNull())
-			m_component = compListData[0];
+		m_component = compListData[0];
 	}
 	if (m_component.apiType() != MFn::kMeshEdgeComponent || m_sourceMesh.isNull())
 		return MS::kInvalidParameter;
-
-	cout << m_component.isNull() << endl;
 	
 	if (m_dirtySourceMesh || m_dirtyBaseMesh) {
 		m_dirtySourceMesh = false;

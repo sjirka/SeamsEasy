@@ -255,13 +255,13 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 		return MS::kUnknownParameter;
 
 	// Load attribs ///////////////////////////////////////////////////////////////////////////////
-	if (dirtyMesh) {
+	if (dirtyMesh || m_sourceMesh.isNull()) {
 		MObject sourceMesh = dataBlock.inputValue(aInMesh).asMesh();
 		if (m_sourceMesh.isNull() || !SMesh::isEquivalent(sourceMesh, m_sourceMesh))
 			dirtyBaseMesh = true;
 		m_sourceMesh = sourceMesh;
 	}
-	if (dirtyComponent) {
+	if (dirtyComponent || m_component.isNull()) {
 		dirtyBaseMesh = true;
 		dirtyComponent = false;
 		MObject oSeamsEasyData = dataBlock.inputValue(aSelectedEdges).data();
@@ -448,7 +448,8 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
 
-	dataBlock.outputValue(aOutMesh).set(extrudeMesh.getObject());
+	status = dataBlock.outputValue(aOutMesh).set(extrudeMesh.getObject());
+	CHECK_MSTATUS_AND_RETURN_IT(status);
 	dataBlock.setClean(aOutMesh);
 
 	return MS::kSuccess;
