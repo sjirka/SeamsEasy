@@ -1,7 +1,7 @@
 #include "SeamsEasyNode.h"
 #include "StitchEasyNode.h"
-#include "../_library/SNode.h"
-#include "../_library/SPlane.h"
+#include "SNode.h"
+#include "SPlane.h"
 
 #include <maya\MFnNumericAttribute.h>
 #include <maya\MFnTypedAttribute.h>
@@ -22,6 +22,7 @@
 #include <maya\MDGModifier.h>
 #include <maya\MDagModifier.h>
 #include <maya\MItDependencyGraph.h>
+#include <maya\MAngle.h>
 
 MTypeId SeamsEasyNode::id(0x00127891);
 
@@ -50,6 +51,8 @@ MObject SeamsEasyNode::aProfileWidth;
 MObject SeamsEasyNode::aProfileDepth;
 MObject SeamsEasyNode::aProfileSubdivs;
 MObject SeamsEasyNode::aProfileCurve;
+
+MObject SeamsEasyNode::aHardEdgeAngle;
 
 OffsetParams::Compare OffsetParams::compare = OffsetParams::kDistance;
 
@@ -216,6 +219,12 @@ MStatus SeamsEasyNode::initialize()
 	attributeAffects(aDepthMultiplier, aOutMesh);
 	attributeAffects(aDepthMultiplier, aOutStitchLines);
 
+	aHardEdgeAngle = uAttr.create("hardEdgeAngle", "hardEdgeAngle", MFnUnitAttribute::kAngle, M_PI/2, &status);
+	nAttr.setMin(0);
+	nAttr.setMax(180);
+	addAttribute(aHardEdgeAngle);
+	attributeAffects(aHardEdgeAngle, aOutMesh);
+
 	return MS::kSuccess;
 }
 
@@ -276,11 +285,13 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 	bool extrudeAll = dataBlock.inputValue(aExtrudeAllBoundaries).asBool();
 	float thickness = (float)dataBlock.inputValue(aExtrudeThickness).asDistance().as(MDistance::internalUnit());
 	unsigned int divisions = dataBlock.inputValue(aExtrudeDivisions).asInt();
+	double hardEdgeAngle = dataBlock.inputValue(aHardEdgeAngle).asAngle().as(MAngle::internalUnit());
 
 	// Load profile settings //////////////////////////////////////////////////////////////////////
 	std::set <OffsetParams> offsetParams;
 	OffsetParams::compare = OffsetParams::kDistance;
 
+	dirtyProfile = true;
 	if (dirtyProfile) {
 		std::set <OffsetParams> offsetParamsTmp;
 
@@ -412,11 +423,11 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 		MObject stitchComponent = stitchCompData.create(MFn::kMeshEdgeComponent);
 
 		// Insert new loops
-		std::map <unsigned int, MIntArray> loopEdges;
+		m_loopEdges.clear();
 		for (auto param = offsetParams.rbegin(); param != offsetParams.rend(); param++) {
-			m_profileMesh.getActiveEdges(loopEdges[param->index]);
+			m_profileMesh.getActiveEdges(m_loopEdges[param->index]);
 			if (param->stitch)
-				stitchCompData.addElements(loopEdges[param->index]);
+				stitchCompData.addElements(m_loopEdges[param->index]);
 			status = m_profileMesh.offsetEdgeloops(param->distance + gap / 2, (0 == param->distance && param==--offsetParams.rend()) ? false : true);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 		}
@@ -429,7 +440,7 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 		// Pull loop vertices
 		for (auto param : offsetParams){
 			MIntArray loopVertices;
-			status = m_profileMesh.getEdgeVertices(loopEdges[param.index], loopVertices);
+			status = m_profileMesh.getEdgeVertices(m_loopEdges[param.index], loopVertices);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 			status = m_profileMesh.pullVertices(loopVertices, param.depth);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -445,6 +456,11 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 			extrudeMesh.getActiveEdges(edgesToExtrude);
 
 		status = extrudeMesh.extrudeEdges(edgesToExtrude, thickness, divisions);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+	}
+
+	for (auto &loop : m_loopEdges) {
+		status = extrudeMesh.setHardEdges(loop.second, hardEdgeAngle);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
 

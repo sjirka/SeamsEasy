@@ -1,8 +1,10 @@
 #pragma once
+
+#include "SMesh.h"
+
 #include <maya\MPxNode.h>
 #include <maya\MFnComponentListData.h>
 #include <maya\MFnSingleIndexedComponent.h>
-#include <SMesh.h>
 #include <maya\MMatrix.h>
 
 class StitchEasyNode : public MPxNode

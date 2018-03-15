@@ -14,6 +14,7 @@
 #include <maya\MMatrix.h>
 #include <maya\MItDependencyNodes.h>
 #include <maya\MArgList.h>
+#include <maya\MAngle.h>
 
 SeamsEasyCmd::SeamsEasyCmd()
 {
@@ -45,6 +46,7 @@ MSyntax SeamsEasyCmd::newSyntax()
 	syntax.addFlag(SORT_FLAG, SORT_FLAG_LONG, MSyntax::kString, MSyntax::kString);
 	syntax.addFlag(DISTANCEMULTI_FLAG, DISTANCEMULTI_FLAG_LONG, MSyntax::kDouble);
 	syntax.addFlag(DEPTHMULTI_FLAG, DEPTHMULTI_FLAG_LONG, MSyntax::kDouble);
+	syntax.addFlag(HARDEDGEANGLE_FLAG, HARDEDGEANGLE_FLAG_LONG, MSyntax::kAngle);
 
 	syntax.addArg(MSyntax::kString);
 
@@ -318,9 +320,10 @@ MStatus SeamsEasyCmd::queryAttrValue(MPlug& attrPlug) {
 	MDataHandle hAttr = attrPlug.asMDataHandle();
 	MFnNumericData::Type type = hAttr.numericType();
 
-	if (attrPlug == SeamsEasyNode::aProfileMode) {
+	if (attrPlug == SeamsEasyNode::aProfileMode)
 		appendToResult(attrPlug.asShort());
-	}
+	else if (attrPlug == SeamsEasyNode::aHardEdgeAngle)
+		appendToResult(attrPlug.asMAngle().as(MAngle::uiUnit()));
 	else {
 		switch (type) {
 		case MFnNumericData::kBoolean:
@@ -356,6 +359,10 @@ MStatus SeamsEasyCmd::setFlagAttr(MArgDatabase& argData, char *flag, MPlug& attr
 	if (attrPlug == SeamsEasyNode::aProfileMode) {
 		int value = argData.flagArgumentBool(flag, 0, &status);
 		status = m_dagMod.newPlugValueInt(attrPlug, value);
+	}
+	else if (attrPlug == SeamsEasyNode::aHardEdgeAngle) {
+		MAngle value = argData.flagArgumentMAngle(flag, 0, &status);
+		status = m_dagMod.newPlugValueMAngle(attrPlug, value);
 	}
 	else {
 		switch (type) {

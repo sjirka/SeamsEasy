@@ -1,7 +1,7 @@
 #pragma once
 
 #include "SeamsEasyNode.h"
-#include "../_library/SNode.h"
+#include "SNode.h"
 
 #include <maya\MPxCommand.h>
 #include <maya\MDGModifier.h>
@@ -9,8 +9,9 @@
 #include <maya\MDagPath.h>
 #include <maya\MDistance.h>
 #include <maya\MArgDatabase.h>
-#include <map>
 #include <maya\MPlugArray.h>
+
+#include <map>
 
 #define THICKNESS_FLAG_LONG		"-thickness"
 #define	THICKNESS_FLAG			"-th"
@@ -47,6 +48,9 @@
 
 #define DEPTHMULTI_FLAG_LONG	"-depthMultiplier"
 #define DEPTHMULTI_FLAG			"-dpm"
+
+#define HARDEDGEANGLE_FLAG_LONG	"-hardEdgeAngle"
+#define HARDEDGEANGLE_FLAG		"-hea"
 
 class SeamsEasyCmd : public MPxCommand
 {
@@ -89,7 +93,8 @@ private:
 		{ DEPTH_FLAG, SeamsEasyNode::aProfileDepth },
 		{ SUBDIVS_FLAG, SeamsEasyNode::aProfileSubdivs },
 		{ DISTANCEMULTI_FLAG, SeamsEasyNode::aDistanceMultiplier },
-		{ DEPTHMULTI_FLAG, SeamsEasyNode::aDepthMultiplier }
+		{ DEPTHMULTI_FLAG, SeamsEasyNode::aDepthMultiplier },
+		{ HARDEDGEANGLE_FLAG, SeamsEasyNode::aHardEdgeAngle },
 	};
 };
 

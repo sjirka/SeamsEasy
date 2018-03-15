@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SSeamMesh.h"
+
 #include <maya\MPxNode.h>
 #include <maya\MItMeshPolygon.h>
 #include <maya\MItMeshEdge.h>
@@ -8,10 +10,10 @@
 #include <maya\MNodeMessage.h>
 #include <maya\MObjectArray.h>
 #include <maya\MCallbackIdArray.h>
+
 #include <set>
 #include <map>
 #include <deque>
-#include <SSeamMesh.h>
 
 class OffsetParams {
 public:
@@ -128,6 +130,8 @@ public:
 	static MObject aProfileSubdivs;
 	static MObject aProfileCurve;
 
+	static MObject aHardEdgeAngle;
+
 private:
 	MObject
 		m_sourceMesh,
@@ -135,6 +139,7 @@ private:
 	SSeamMesh
 		m_baseMesh,
 		m_profileMesh;
+	std::map <unsigned int, MIntArray> m_loopEdges;
 
 	MCallbackIdArray callbackIds;
 

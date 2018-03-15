@@ -1,7 +1,8 @@
 #pragma once
 
-#include <maya\MPxContextCommand.h>
 #include "StitchEasyCtx.h"
+
+#include <maya\MPxContextCommand.h>
 
 class StitchEasyCtxCmd : public MPxContextCommand
 {

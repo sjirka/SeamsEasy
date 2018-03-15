@@ -1,6 +1,8 @@
 #include "StitchEasyCmd.h"
 #include "StitchEasyNode.h"
 #include "SeamsEasyNode.h"
+#include "../_library/SShadingGroup.h"
+#include "SNode.h"
 
 #include <maya\MSyntax.h>
 #include <maya\MSelectionList.h>
@@ -13,8 +15,6 @@
 #include <maya\MFnTransform.h>
 #include <maya\MMatrix.h>
 #include <maya\MArgList.h>
-#include <SShadingGroup.h>
-#include <SNode.h>
 #include <maya\MItDependencyGraph.h>
 
 StitchEasyCmd::StitchEasyCmd()
