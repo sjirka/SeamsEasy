@@ -1,0 +1,184 @@
+global string $seamsEasySortValue = "";
+global string $seamsEasySortOrder = "";
+
+global proc AEseamsEasyTemplate(string $nodeName) {
+	editorTemplate -beginScrollLayout ;
+
+	editorTemplate -beginLayout "Seam Lines settings" -collapse 0;
+		editorTemplate -label "Gap" -addControl "gap";
+		editorTemplate -label "Thickness" -addControl "thickness" ;
+		editorTemplate -label "Divisons" -addControl "divisions" ;
+		editorTemplate -label "Extrude all boundaries" -addControl "extrudeAllBoundaries";
+		editorTemplate -addSeparator;
+		editorTemplate -label "Profile mode" -addControl "profileMode";
+		editorTemplate -label "Symmetrical seam" -addControl "symmetry";
+	editorTemplate -endLayout;
+
+	source AEnewNonNumericMulti;
+
+	// Manual profile
+	editorTemplate -beginLayout "Manual profile settings" -collapse 0;
+		editorTemplate -label "Distance multiplier" -addControl "distanceMultiplier";
+		editorTemplate -label "Depth multiplier" -addControl "depthMultiplier";
+		editorTemplate -callCustom "AEseamsEasy_new" "AEseamsEasy_edit" "offsetA";
+		editorTemplate -callCustom "AEseamsEasy_new" "AEseamsEasy_edit" "offsetB";
+	editorTemplate -endLayout;
+
+	// Profile curve
+	editorTemplate -beginLayout "Profile curve settings" -collapse 1;
+		editorTemplate -beginLayout "Side A" -collapse 0;
+			editorTemplate -label "Width" -addControl "profileWidthA";
+			editorTemplate -label "Depth" -addControl "profileDepthA";
+			editorTemplate -label "Subdivisions" -addControl "profileSubdivsA";
+			AEaddRampControl( $nodeName + ".profileCurveA" );
+		editorTemplate -endLayout;
+		editorTemplate -beginLayout "Side B" -collapse 0;
+			editorTemplate -label "Width" -addControl "profileWidthB";
+			editorTemplate -label "Depth" -addControl "profileDepthB";
+			editorTemplate -label "Subdivisions" -addControl "profileSubdivsB";
+			AEaddRampControl( $nodeName + ".profileCurveB" );
+		editorTemplate -endLayout;
+	editorTemplate -endLayout;
+
+	editorTemplate -beginLayout "Hard edge settings" -collapse 1;
+		editorTemplate -label "Threshold angle" -addControl "hardEdgeAngle";
+	editorTemplate -endLayout;
+
+	editorTemplate -suppress "inMesh";
+	editorTemplate -suppress "outMesh";
+	editorTemplate -suppress "seamLines";
+	editorTemplate -suppress "distanceMultiplier";
+	editorTemplate -suppress "depthMultiplier";
+	
+	editorTemplate -addExtraControls ;
+	editorTemplate -endScrollLayout ;
+}
+
+
+global proc AEseamsEasy_new( string $name ){
+	string $buffer[];
+	tokenize $name "." $buffer;
+	string $node = $buffer[0];
+	string $side = (endsWith($name, "A"))?"A":"B";
+
+	setUITemplate -pst attributeEditorTemplate;
+
+	frameLayout -l ("Side "+$side) -collapse 0 ("AEseamsEasy_side"+$side+"_Frame");
+	AEseamsEasy_buildUI($node, $side);
+	setParent..;
+
+	setUITemplate -ppt;
+}
+
+global proc AEseamsEasy_edit( string $name ){
+	string $buffer[];
+	tokenize $name "." $buffer;
+	string $node = $buffer[0];
+	string $side = (endsWith($name, "A"))?"A":"B";
+
+	string $children[] = `layout -query -childArray ("AEseamsEasy_side"+$side+"_Frame")`;
+
+	for($child in $children)
+		deleteUI $child;
+
+	setParent ("AEseamsEasy_side"+$side+"_Frame");
+	AEseamsEasy_buildUI($node, $side);
+	setParent..;
+}
+
+global proc AEseamsEasy_buildUI( string $node, string $side ){
+	button -l "Insert edge loop" -c ("AEnewNonNumericMultiAddNewItem(\""+$node+"\",\"offset"+$side+"\");");
+	
+	string $offsetAttribute = $node+".offset"+$side;
+
+	int $offsetIndices[] = `getAttr -multiIndices $offsetAttribute`;
+
+	if(size($offsetIndices)>0){
+		// Collumn labels
+		string $header = `formLayout`;
+
+			string $distanceLabel = `iconTextButton
+				-h 15
+				-ann "Sort by Distance"
+				-c ("AEseamsEasy_sort(\""+$node+"\", \"distance\")")
+				-st "textOnly"
+				-l "Distance"`;
+			string $depthLabel = `iconTextButton
+				-h 15
+				-ann "Sort by Depth"
+				-c ("AEseamsEasy_sort(\""+$node+"\", \"depth\")")
+				-st "textOnly"
+				-l "Depth"`;
+			string $stitchesLabel = `text -l "Stitches"`;
+
+		setParent..;
+
+		formLayout -e
+		-attachForm $distanceLabel "top" 6
+		-attachForm $distanceLabel "left" 15
+
+		-attachForm $depthLabel "top" 6
+		-attachForm $depthLabel "left" 195
+
+		-attachForm $stitchesLabel "top" 6
+		-attachForm $stitchesLabel "left" 370
+		$header;
+
+		int $i=0;
+		for($index in $offsetIndices){
+			string $offsetEntry = `formLayout`;
+
+				string $distanceGrp = `attrFieldSliderGrp
+					-at ($offsetAttribute+"["+$index+"].distance"+$side)
+					-w 180
+					-cw3 0 60 120
+					-co3 0 0 0`;
+
+				string $depthGrp = `attrFieldSliderGrp
+					-at ($offsetAttribute+"["+$index+"].depth"+$side)
+					-w 180
+					-cw3 0 60 120
+					-co3 0 0 0`;
+
+				string $stitchBox = `checkBox -l ""`;
+				connectControl $stitchBox ($offsetAttribute+"["+$index+"].stitch"+$side);
+
+				string $removeBtn = `symbolButton
+				-i "cross.png"
+				-w 20
+				-c ("AEremoveMultiElement(\""+$offsetAttribute+"["+$index+"]"+"\")")`;
+
+			setParent..;
+
+			formLayout -e
+				-attachForm $distanceGrp "top" 3
+				-attachForm $distanceGrp "left" 0
+
+				-attachForm $depthGrp "top" 3
+				-attachControl $depthGrp "left" 0 $distanceGrp
+
+				-attachForm $stitchBox "top" 5
+				-attachControl $stitchBox "left" 10 $depthGrp
+
+				-attachForm $removeBtn "top" 1
+				-attachForm $removeBtn "right" 5
+
+			$offsetEntry;
+
+			if($i%2==0)
+				control -e -bgc 0.25 0.25 0.25 $offsetEntry;
+
+			$i++;
+		}
+	}
+}
+
+global proc AEseamsEasy_sort(string $node, string $value){
+	global string $seamsEasySortValue;
+	global string $seamsEasySortOrder;
+
+	$seamsEasySortOrder = ($seamsEasySortValue == $value && $seamsEasySortOrder=="asc") ? "desc" : "asc";
+	$seamsEasySortValue = $value;
+
+	seamsEasy -e -sort $seamsEasySortValue $seamsEasySortOrder $node;
+}

@@ -1,0 +1,52 @@
+global proc AEstitchEasyTemplate (string $nodeName) {
+	editorTemplate -beginScrollLayout ;
+
+	editorTemplate -beginLayout "Stitch settings" -collapse 0;
+		editorTemplate -label "Distance" -addControl "distance";
+		editorTemplate -label "Length" -addControl "length";
+		editorTemplate -label "Use length" -addControl "useLength" ;
+		editorTemplate -label "Thickness" -addControl "thickness";
+		editorTemplate -label "Skew" -addControl "skew";
+		editorTemplate -label "Multiplier" -addControl "multiplier";
+		editorTemplate -addSeparator;
+		editorTemplate -label "Subdivisions" -addControl "smoothLevel";
+	editorTemplate -endLayout;
+
+	editorTemplate -beginLayout "Transformations" -collapse 0;
+		editorTemplate -label "Flip normal" -addControl "flipNormal";
+		editorTemplate -label "Translate" -addControl "translate";
+		editorTemplate -label "Rotate" -addControl "rotate";
+		editorTemplate -label "Scale" -addControl "scale";
+	editorTemplate -endLayout;
+
+	editorTemplate -beginLayout "Custom stitch mesh" -collapse 0;
+		editorTemplate -callCustom "AEstitchEasy_new" "AEstitchEasy_new" "customGeometry";
+		editorTemplate -label "Use custom mesh" -addControl "useCustom";
+	editorTemplate -endLayout;
+
+	editorTemplate -suppress "inMesh";
+	editorTemplate -suppress "outMesh";
+	editorTemplate -suppress "stitchLines";
+	
+	editorTemplate -addExtraControls ;
+	editorTemplate -endScrollLayout ;
+}
+
+
+global proc AEstitchEasy_new( string $name ){
+	setUITemplate -pst attributeEditorTemplate;
+
+	if(`control -q -ex AEstitchEasySelectCustom`)
+		deleteUI -ctl AEstitchEasySelectCustom;
+	
+	string $buffer[];
+	tokenize $name "." $buffer;
+	string $node = $buffer[0];
+
+	button
+		-l "Select custom stitch mesh"
+		-c ("string $stitchSelCtx = `stitchEasyCtx`; stitchEasyCtx -e -nd \""+$node+"\" $stitchSelCtx; setToolTo $stitchSelCtx;")
+		AEstitchEasySelectCustom;
+
+	setUITemplate -ppt;
+}
