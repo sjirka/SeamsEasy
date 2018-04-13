@@ -38,7 +38,7 @@ void StitchEasyCtx::deleteAction() {
 
 void StitchEasyCtx::completeAction(){
 	if (m_nodeName!="") {
-		MSelectionList selection;q
+		MSelectionList selection;
 		MGlobal::getActiveSelectionList(selection, true);
 
 		MItSelectionList itSelected(selection, MFn::kMesh);

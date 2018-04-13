@@ -94,7 +94,7 @@ MStatus StitchEasyNode::initialize() {
 	attributeAffects(aUseCustomGeometry, aOutMesh);
 
 	// Parameters
-	aDistance = uAttr.create("distance", "distance", MFnUnitAttribute::kDistance, 0.5);
+	aDistance = uAttr.create("distanceB", "distanceB", MFnUnitAttribute::kDistance, 0.5);
 	uAttr.setMin(0.001);
 	uAttr.setSoftMin(0.1);
 	uAttr.setSoftMax(10);
@@ -268,7 +268,7 @@ MStatus StitchEasyNode::compute(const MPlug &plug, MDataBlock &datablock) {
 		m_dirtySourceMesh = false;
 		m_dirtySmoothMesh = true;
 		if(!m_dirtyBaseMesh) {
-			status = m_baseMesh.updateMesh(m_sourceMesh);
+			status = m_workMesh.updateMesh(m_sourceMesh);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 		}
 		else {
@@ -278,9 +278,9 @@ MStatus StitchEasyNode::compute(const MPlug &plug, MDataBlock &datablock) {
 			MIntArray edges;
 			fnComponent.getElements(edges);
 
-			m_baseMesh = SMesh(m_sourceMesh, &status);
+			m_workMesh = SMesh(m_sourceMesh, &status);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
-			status = m_baseMesh.setActiveEdges(edges);
+			status = m_workMesh.setActiveEdges(edges);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 		}
 	}
@@ -292,7 +292,7 @@ MStatus StitchEasyNode::compute(const MPlug &plug, MDataBlock &datablock) {
 		MObject smoothMesh = datablock.inputValue(aInSmoothMesh).asMesh();
 		bool useSmoothMesh = datablock.inputValue(aUseSmoothMesh).asBool();
 
-		m_smoothMesh = SMesh(m_baseMesh);
+		m_smoothMesh = SMesh(m_workMesh);
 		if (useSmoothMesh) {
 			MFnDependencyNode fnNode(thisMObject());
 

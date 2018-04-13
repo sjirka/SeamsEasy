@@ -63,7 +63,7 @@ private:
 		m_stitchMesh;
 
 	SMesh
-		m_baseMesh,
+		m_workMesh,
 		m_smoothMesh;
 
 	bool

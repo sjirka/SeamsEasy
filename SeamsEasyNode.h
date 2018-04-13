@@ -100,6 +100,8 @@ public:
 
 	static void attrChanged(MNodeMessage::AttributeMessage msg, MPlug &plug, MPlug &otherPlug, void *data);
 
+	SSeamMesh* getMeshPtr();
+
 	static MTypeId id;
 
 	// Seam attributes
@@ -117,29 +119,45 @@ public:
 	
 	static MObject aProfileMode;
 
-	static MObject aOffset;
-	static MObject aOffsetDistance;
-	static MObject aOffsetDepth;
-	static MObject aOffsetStitch;
+	static MObject aSymmetry;
+
+	static MObject aOffsetA;
+	static MObject aOffsetADistance;
+	static MObject aOffsetADepth;
+	static MObject aOffsetAStitch;
+
+	static MObject aOffsetB;
+	static MObject aOffsetBDistance;
+	static MObject aOffsetBDepth;
+	static MObject aOffsetBStitch;
 
 	static MObject aDistanceMultiplier;
 	static MObject aDepthMultiplier;
 
-	static MObject aProfileWidth;
-	static MObject aProfileDepth;
-	static MObject aProfileSubdivs;
-	static MObject aProfileCurve;
+	static MObject aProfileAWidth;
+	static MObject aProfileADepth;
+	static MObject aProfileASubdivs;
+	static MObject aProfileACurve;
+
+	static MObject aProfileBWidth;
+	static MObject aProfileBDepth;
+	static MObject aProfileBSubdivs;
+	static MObject aProfileBCurve;
 
 	static MObject aHardEdgeAngle;
 
 private:
 	MObject
-		m_sourceMesh,
 		m_component;
 	SSeamMesh
 		m_baseMesh,
+		m_workMesh,
 		m_profileMesh;
-	std::map <unsigned int, MIntArray> m_loopEdges;
+	std::map <unsigned int, MIntArray>
+		m_loopEdgesA,
+		m_loopEdgesB;
+
+	MStatus loadProfileCurveSetting(MObject& rampAttribute, float width, float depth, int subdivisions, std::set <OffsetParams> &offsetParams);
 
 	MCallbackIdArray callbackIds;
 

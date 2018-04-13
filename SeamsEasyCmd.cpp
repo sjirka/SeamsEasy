@@ -190,7 +190,7 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 				setFlagAttr(argData, flag.first, fnNode.findPlug(flag.second));
 
 		if (argData.isFlagSet(ADDLOOP_FLAG)) {
-			MPlug offset = fnNode.findPlug(SeamsEasyNode::aOffset);
+			MPlug offset = fnNode.findPlug(SeamsEasyNode::aOffsetA);
 			MIntArray indices;
 			int lowestAvId = (offset.getExistingArrayAttributeIndices(indices) == 0) ? 0 : indices[indices.length() - 1] + 1;
 
@@ -198,13 +198,13 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 				MArgList argList;
 				argData.getFlagArgumentList(ADDLOOP_FLAG, i, argList);
 
-				MPlug pDistance = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetDistance);
+				MPlug pDistance = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetADistance);
 				m_dgMod.newPlugValueMDistance(pDistance, argList.asDistance(0));
 
-				MPlug pDepth = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetDepth);
+				MPlug pDepth = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetADepth);
 				m_dgMod.newPlugValueMDistance(pDepth, argList.asDistance(1));
 
-				MPlug pStitch = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetStitch);
+				MPlug pStitch = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetAStitch);
 				m_dgMod.newPlugValueBool(pDepth, argList.asBool(2));
 
 				lowestAvId++;
@@ -225,35 +225,36 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 				return status;
 			}
 
-			std::set <OffsetParams> offsetParams;
+			std::set <OffsetParams> offsetParamsA;
 
-			MPlug pOffset = fnNode.findPlug(SeamsEasyNode::aOffset);
+			MPlug pOffset = fnNode.findPlug(SeamsEasyNode::aOffsetA);
 			MIntArray offsetIndices;
 
 			for (unsigned int i = 0; i < pOffset.getExistingArrayAttributeIndices(offsetIndices); i++) {
 				MPlug pOffsetElement = pOffset.elementByLogicalIndex(offsetIndices[i]);
 				OffsetParams offsetParam(
-					pOffsetElement.child(SeamsEasyNode::aOffsetDistance).asFloat(),
-					pOffsetElement.child(SeamsEasyNode::aOffsetDepth).asFloat(),
-					pOffsetElement.child(SeamsEasyNode::aOffsetStitch).asBool(),
+					pOffsetElement.child(SeamsEasyNode::aOffsetADistance).asFloat(),
+					pOffsetElement.child(SeamsEasyNode::aOffsetADepth).asFloat(),
+					pOffsetElement.child(SeamsEasyNode::aOffsetAStitch).asBool(),
 					offsetIndices[i]
 				);
 
-				offsetParams.insert(offsetParam);
+				offsetParamsA.insert(offsetParam);
 			}
 
 			if (order == "asc" || order == "desc") {
-				auto param = offsetParams.begin();
-				auto rparam = offsetParams.rbegin();
+				auto param = offsetParamsA.begin();
+				auto rparam = offsetParamsA.rbegin();
 
 				for (unsigned int i = 0; i < offsetIndices.length(); i++) {
 					MPlug pOffsetElement = pOffset.elementByLogicalIndex(offsetIndices[i]);
-					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetDistance), (order == "asc") ? param->distance : rparam->distance);
-					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetDepth), (order == "asc") ? param->depth : rparam->depth);
-					m_dagMod.newPlugValueBool(pOffsetElement.child(SeamsEasyNode::aOffsetStitch), (order == "asc") ? param->stitch : rparam->stitch);
+					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetADistance), (order == "asc") ? param->distance : rparam->distance);
+					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetADepth), (order == "asc") ? param->depth : rparam->depth);
+					m_dagMod.newPlugValueBool(pOffsetElement.child(SeamsEasyNode::aOffsetAStitch), (order == "asc") ? param->stitch : rparam->stitch);
 					param++; rparam++;
 				}
 			}
+
 			else {
 				displayError("invalid value");
 				setResult(false);
