@@ -1,5 +1,6 @@
 #include "SeamsEasyNode.h"
 #include "StitchEasyNode.h"
+#include "SeamsEasyData.h"
 #include "SNode.h"
 #include "SPlane.h"
 
@@ -27,19 +28,22 @@
 
 MTypeId SeamsEasyNode::id(0x00127891);
 
+// Output
 MObject SeamsEasyNode::aOutMesh;
 MObject SeamsEasyNode::aOutStitchLines;
 
+// Geometry
+MObject SeamsEasyNode::aEdgeLoops;
 MObject SeamsEasyNode::aInMesh;
-MObject SeamsEasyNode::aSelectedEdges;
 
+// Settings
 MObject SeamsEasyNode::aExtrudeAllBoundaries;
 MObject SeamsEasyNode::aExtrudeThickness;
 MObject SeamsEasyNode::aExtrudeDivisions;
 MObject SeamsEasyNode::aGap;
-
 MObject SeamsEasyNode::aProfileMode;
 MObject SeamsEasyNode::aSymmetry;
+MObject SeamsEasyNode::aHardEdgeAngle;
 
 // Manual profile
 MObject SeamsEasyNode::aOffsetA;
@@ -65,8 +69,6 @@ MObject SeamsEasyNode::aProfileBWidth;
 MObject SeamsEasyNode::aProfileBDepth;
 MObject SeamsEasyNode::aProfileBSubdivs;
 MObject SeamsEasyNode::aProfileBCurve;
-
-MObject SeamsEasyNode::aHardEdgeAngle;
 
 OffsetParams::Compare OffsetParams::compare = OffsetParams::kDistance;
 
@@ -134,10 +136,16 @@ MStatus SeamsEasyNode::initialize()
 	attributeAffects(aInMesh, aOutMesh);
 	attributeAffects(aInMesh, aOutStitchLines);
 
-	aSelectedEdges = tAttr.create("seamLines", "seamLines", MFnData::kComponentList, &status);
-	addAttribute(aSelectedEdges);
-	attributeAffects(aSelectedEdges, aOutMesh);
-	attributeAffects(aSelectedEdges, aOutStitchLines);
+	// Seam edges /////////////////////////////////////////////////////////////////////////////////
+
+	aEdgeLoops = tAttr.create("seams", "seams", SeamsEasyData::id, MObject::kNullObj, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	tAttr.setArray(true);
+	tAttr.setWritable(true);
+	tAttr.setStorable(true);
+	addAttribute(aEdgeLoops);
+	attributeAffects(aEdgeLoops, aOutMesh);
+	attributeAffects(aEdgeLoops, aOutStitchLines);
 
 	// Extrude attributes /////////////////////////////////////////////////////////////////////////
 	aExtrudeAllBoundaries = nAttr.create("extrudeAllBoundaries", "extrudeAllBoundaries", MFnNumericData::kBoolean, 0, &status);
@@ -305,124 +313,101 @@ MStatus SeamsEasyNode::initialize()
 	return MS::kSuccess;
 }
 
-MStatus SeamsEasyNode::setDependentsDirty(const MPlug &plug, MPlugArray &affected) {
-	if (aInMesh == plug)
-		dirtyMesh = true;
-
-	if (aSelectedEdges == plug)
-		dirtyComponent = true;
-
-	if (aExtrudeAllBoundaries == plug ||
-		aExtrudeThickness == plug ||
-		aExtrudeDivisions == plug)
-		dirtyExtrude = true;
-
-	if (aGap == plug ||
-		aProfileMode == plug ||
-		aSymmetry == plug ||
-
-		aProfileAWidth == plug ||
-		aProfileADepth == plug ||
-		aProfileASubdivs == plug ||
-		aProfileACurve == plug.parent().array() ||
-
-		aProfileBWidth == plug ||
-		aProfileBDepth == plug ||
-		aProfileBSubdivs == plug ||
-		aProfileBCurve == plug.parent().array() ||
-
-		aOffsetA == plug ||
-		aOffsetADepth == plug ||
-		aOffsetADistance == plug ||
-		aOffsetAStitch == plug ||
-
-		aOffsetB == plug ||
-		aOffsetBDepth == plug ||
-		aOffsetBDistance == plug ||
-		aOffsetBStitch == plug ||
-
-		aDepthMultiplier == plug||
-		aDistanceMultiplier == plug)
-		dirtyProfile = true;
-
-	return MS::kSuccess;
-}
-
 MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 	MStatus status;
 
+	
 	if (plug != aOutMesh)
 		return MS::kUnknownParameter;
-
-	// Load attribs ///////////////////////////////////////////////////////////////////////////////
-	if (dirtyMesh || m_baseMesh.isNull()) {
-		MObject sourceMesh = dataBlock.inputValue(aInMesh).asMesh();
-		if (m_baseMesh.isNull() || !SMesh::isEquivalent(sourceMesh, m_baseMesh.getObject())) {
-			dirtyBaseMesh = true;
-			dirtyComponent = true;
-			m_baseMesh = SSeamMesh(sourceMesh);
-		}
-		else
-			m_baseMesh.updateMesh(sourceMesh);
-	}
-	if (dirtyComponent || m_component.isNull()) {
-		dirtyBaseMesh = true;
-		dirtyComponent = false;
-		MObject oSeamsEasyData = dataBlock.inputValue(aSelectedEdges).data();
-		MFnComponentListData compListData(oSeamsEasyData, &status);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-		m_component = compListData[0];
-		m_baseMesh.setActiveEdges(m_component);
-	}
-	if (m_component.apiType() != MFn::kMeshEdgeComponent || m_baseMesh.isNull())
+	
+	sourceMesh = dataBlock.inputValue(aInMesh).asMesh();
+	if (sourceMesh.isNull())
 		return MS::kInvalidParameter;
 
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	SSeamMesh baseMesh(sourceMesh, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	SSeamMesh workMesh(baseMesh);
+
+	MIntArray splitEdges;
+	std::vector <SEdgeLoop> baseLoops;
+
+	MArrayDataHandle hEdgeLoopsArray = dataBlock.inputArrayValue(aEdgeLoops);
+	for (unsigned int i = 0; i < hEdgeLoopsArray.elementCount(); i++) {
+		hEdgeLoopsArray.jumpToArrayElement(i);
+		MDataHandle hEdgeLoopsElement = hEdgeLoopsArray.inputValue();
+
+		MPxData *dataPtr = hEdgeLoopsElement.asPluginData();
+		SeamsEasyData *edgeLoopData = dynamic_cast<SeamsEasyData*>(dataPtr);
+
+		edgeLoopData->edgeLoop.setMeshPtr(&sourceMesh);
+		baseLoops.push_back(edgeLoopData->edgeLoop);
+
+		for (unsigned e = 0; e < edgeLoopData->edgeLoop.numEdges(); e++)
+			splitEdges.append(edgeLoopData->edgeLoop[e]);
+	}
+
+	status = workMesh.detachEdges(splitEdges);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	status = workMesh.transferEdges(sourceMesh, splitEdges);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	
 	// Load numeric attribs ///////////////////////////////////////////////////////////////////////
-	bool extrudeAll = dataBlock.inputValue(aExtrudeAllBoundaries).asBool();
-	float thickness = (float)dataBlock.inputValue(aExtrudeThickness).asDistance().as(MDistance::internalUnit());
-	unsigned int divisions = dataBlock.inputValue(aExtrudeDivisions).asInt();
 	double hardEdgeAngle = dataBlock.inputValue(aHardEdgeAngle).asAngle().as(MAngle::internalUnit());
 	bool symmetry = dataBlock.inputValue(aSymmetry).asBool();
+	float gap = (float)dataBlock.inputValue(aGap).asDistance().as(MDistance::internalUnit());
 
 	// Load profile settings //////////////////////////////////////////////////////////////////////
 	std::set <OffsetParams> offsetParamsA;
 	std::set <OffsetParams> offsetParamsB;
 	OffsetParams::compare = OffsetParams::kDistance;
 
-	dirtyProfile = true;
-	if (dirtyProfile) {
+	int profileMode = dataBlock.inputValue(aProfileMode).asInt();
+	switch (profileMode)
+	{
+	case 1: {
+		// Profile curve mode
+		// Side A
+		int subdivisionsA = dataBlock.inputValue(aProfileASubdivs).asInt();
+		float widthA = (float)dataBlock.inputValue(aProfileAWidth).asDistance().as(MDistance::internalUnit());
+		float depthA = (float)dataBlock.inputValue(aProfileADepth).asDistance().as(MDistance::internalUnit());
+		loadProfileCurveSetting(aProfileACurve, widthA, depthA, subdivisionsA, offsetParamsA);
 
-		dirtyProfile = false;
-		dirtyProfileMesh = true;
-
-		int profileMode = dataBlock.inputValue(aProfileMode).asInt();
-
-		switch (profileMode)
-		{
-		case 1: {
-			// Profile curve mode
-			// Side A
-			int subdivisionsA = dataBlock.inputValue(aProfileASubdivs).asInt();
-			float widthA = (float)dataBlock.inputValue(aProfileAWidth).asDistance().as(MDistance::internalUnit());
-			float depthA = (float)dataBlock.inputValue(aProfileADepth).asDistance().as(MDistance::internalUnit());
-			loadProfileCurveSetting(aProfileACurve, widthA, depthA, subdivisionsA, offsetParamsA);
-
-			// Side B
-			if (symmetry)
-				offsetParamsB = offsetParamsA;
-			else {
-				int subdivisionsB = dataBlock.inputValue(aProfileBSubdivs).asInt();
-				float widthB = (float)dataBlock.inputValue(aProfileBWidth).asDistance().as(MDistance::internalUnit());
-				float depthB = (float)dataBlock.inputValue(aProfileBDepth).asDistance().as(MDistance::internalUnit());
-				loadProfileCurveSetting(aProfileBCurve, widthB, depthB, subdivisionsB, offsetParamsB);
-			}
+		// Side B
+		if (symmetry)
+			offsetParamsB = offsetParamsA;
+		else {
+			int subdivisionsB = dataBlock.inputValue(aProfileBSubdivs).asInt();
+			float widthB = (float)dataBlock.inputValue(aProfileBWidth).asDistance().as(MDistance::internalUnit());
+			float depthB = (float)dataBlock.inputValue(aProfileBDepth).asDistance().as(MDistance::internalUnit());
+			loadProfileCurveSetting(aProfileBCurve, widthB, depthB, subdivisionsB, offsetParamsB);
 		}
-		default: { // manual mode
-			float distanceMultiplier = dataBlock.inputValue(aDistanceMultiplier).asFloat();
-			float depthMultiplier = dataBlock.inputValue(aDepthMultiplier).asFloat();
+	}
+	default: { // manual mode
+		float distanceMultiplier = dataBlock.inputValue(aDistanceMultiplier).asFloat();
+		float depthMultiplier = dataBlock.inputValue(aDepthMultiplier).asFloat();
 			
-			// Side A
-			MArrayDataHandle hOffsetArray = dataBlock.inputArrayValue(aOffsetA);
+		// Side A
+		MArrayDataHandle hOffsetArray = dataBlock.inputArrayValue(aOffsetA);
+		for (unsigned int i = 0; i < hOffsetArray.elementCount(); i++) {
+			OffsetParams newParam;
+
+			hOffsetArray.jumpToArrayElement(i);
+			MDataHandle hOffsetElement = hOffsetArray.inputValue();
+
+			newParam.index = i;
+			newParam.distance = (float)hOffsetElement.child(aOffsetADistance).asDistance().as(MDistance::internalUnit())*distanceMultiplier;
+			newParam.depth = (float)hOffsetElement.child(aOffsetADepth).asDistance().as(MDistance::internalUnit())*depthMultiplier;
+			newParam.stitch = hOffsetElement.child(aOffsetAStitch).asBool();
+
+			offsetParamsA.insert(newParam);
+		}
+
+		// Side B
+		if (symmetry)
+			offsetParamsB = offsetParamsA;
+		else{
+			hOffsetArray = dataBlock.inputArrayValue(aOffsetB);
 			for (unsigned int i = 0; i < hOffsetArray.elementCount(); i++) {
 				OffsetParams newParam;
 
@@ -430,36 +415,16 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 				MDataHandle hOffsetElement = hOffsetArray.inputValue();
 
 				newParam.index = i;
-				newParam.distance = (float)hOffsetElement.child(aOffsetADistance).asDistance().as(MDistance::internalUnit())*distanceMultiplier;
-				newParam.depth = (float)hOffsetElement.child(aOffsetADepth).asDistance().as(MDistance::internalUnit())*depthMultiplier;
-				newParam.stitch = hOffsetElement.child(aOffsetAStitch).asBool();
+				newParam.distance = (float)hOffsetElement.child(aOffsetBDistance).asDistance().as(MDistance::internalUnit())*distanceMultiplier;
+				newParam.depth = (float)hOffsetElement.child(aOffsetBDepth).asDistance().as(MDistance::internalUnit())*depthMultiplier;
+				newParam.stitch = hOffsetElement.child(aOffsetBStitch).asBool();
 
-				offsetParamsA.insert(newParam);
+				offsetParamsB.insert(newParam);
 			}
-
-			// Side B
-			if (symmetry)
-				offsetParamsB = offsetParamsA;
-			else{
-				hOffsetArray = dataBlock.inputArrayValue(aOffsetB);
-				for (unsigned int i = 0; i < hOffsetArray.elementCount(); i++) {
-					OffsetParams newParam;
-
-					hOffsetArray.jumpToArrayElement(i);
-					MDataHandle hOffsetElement = hOffsetArray.inputValue();
-
-					newParam.index = i;
-					newParam.distance = (float)hOffsetElement.child(aOffsetBDistance).asDistance().as(MDistance::internalUnit())*distanceMultiplier;
-					newParam.depth = (float)hOffsetElement.child(aOffsetBDepth).asDistance().as(MDistance::internalUnit())*depthMultiplier;
-					newParam.stitch = hOffsetElement.child(aOffsetBStitch).asBool();
-
-					offsetParamsB.insert(newParam);
-				}
-			}
-
-			break;
 		}
-		}
+
+		break;
+	}
 	}
 
 	if (offsetParamsA.size() == 0 || offsetParamsA.begin()->distance != 0){
@@ -470,95 +435,69 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 		OffsetParams newParam(0, 0, 0, dataBlock.inputArrayValue(aOffsetB).elementCount());
 		offsetParamsB.insert(newParam);
 	}
+		
+	// Componend to be passed to stitch node
+	MFnComponentListData compListData;
+	MObject compList = compListData.create();
+	MFnSingleIndexedComponent stitchCompData;
+	MObject stitchComponent = stitchCompData.create(MFn::kMeshEdgeComponent);
 
-	/////////////////////////////////////////////////////////////////////////////////////////
-	// Update base mesh
-	if (dirtyMesh || dirtyBaseMesh) {
-		dirtyMesh = false;
-		dirtyProfileMesh = true;
+	// Insert new loops
+	std::map <unsigned int, MIntArray>
+		loopEdgesA,
+		loopEdgesB;
 
-		if (!dirtyBaseMesh) {
-			status = m_workMesh.updateMesh(m_baseMesh.getObject());
-			CHECK_MSTATUS_AND_RETURN_IT(status);
+	std::vector <SEdgeLoop> *activeLoopsPtr = workMesh.activeLoopsPtr();
+
+	MFnMesh fnSourceMesh(sourceMesh);
+	MPointArray meshPoints;
+	fnSourceMesh.getPoints(meshPoints);
+	
+	std::map <unsigned int, unsigned int> parentEdgeMap;
+	workMesh.getEdgeMap(parentEdgeMap);
+
+	for (auto &loop : *activeLoopsPtr) {
+		bool sideA = true;
+		unsigned parentEdge = parentEdgeMap[loop[0]];
+
+		unsigned i = 0;
+		for (auto &baseLoop : baseLoops) {
+			if (baseLoop.contains(parentEdge)) {
+				
+
+				MVector pEdgeVector = baseMesh.getEdgeVector(parentEdge);
+				MVector edgeVector = workMesh.getEdgeVector(loop[0]);
+
+				sideA = (pEdgeVector.normal()*edgeVector.normal() >= 0) ? true : false;
+
+				if(baseLoop.isReversed())
+					sideA = (sideA) ? false : true;
+
+				break;
+			}
 		}
-		else {
-			dirtyBaseMesh = false;
 
-			MIntArray splitlineArray;
-			m_baseMesh.getActiveEdges(splitlineArray);
+		std::set <OffsetParams> offsetParams = (sideA) ? offsetParamsA : offsetParamsB;
 
-			// Create base mesh
-			m_workMesh = SSeamMesh(m_baseMesh);
-			status = m_workMesh.detachEdges(splitlineArray);
-			CHECK_MSTATUS_AND_RETURN_IT(status);
-			status = m_workMesh.transferEdges(m_baseMesh.getObject(), splitlineArray);
+		for (auto param = offsetParams.rbegin(); param != offsetParams.rend(); param++) {
+			workMesh.getActiveEdges((sideA)?loopEdgesA[param->index]: loopEdgesB[param->index]);
+			if (param->stitch)
+				stitchCompData.addElements((sideA)?loopEdgesA[param->index]:loopEdgesB[param->index]);
+
+			float offsetDistance = param->distance + gap / 2;
+			bool createPolygon = (0 == param->distance && param == --offsetParams.rend()) ? false : true;
+
+			status = workMesh.offsetEdgeloop(loop, offsetDistance, createPolygon);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 		}
 	}
-	// Update profile mesh
-	dirtyProfileMesh = true;
-	if (dirtyProfileMesh) {
-		dirtyProfileMesh = false;
 
-		float gap = (float)dataBlock.inputValue(aGap).asDistance().as(MDistance::internalUnit());
+	status = compListData.add(stitchComponent);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+	status = dataBlock.outputValue(aOutStitchLines).set(compList);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		m_profileMesh = SSeamMesh(m_workMesh);
-		
-		// Componend to be passed to stitch node
-		MFnComponentListData compListData;
-		MObject compList = compListData.create();
-		MFnSingleIndexedComponent stitchCompData;
-		MObject stitchComponent = stitchCompData.create(MFn::kMeshEdgeComponent);
-
-		// Insert new loops
-		m_loopEdgesA.clear();
-		m_loopEdgesB.clear();
-
-		std::vector <SEdgeLoop> *baseLoopsPtr = m_baseMesh.activeLoopsPtr();
-		std::vector <SEdgeLoop> *activeLoopsPtr = m_profileMesh.activeLoopsPtr();
-
-		std::map <unsigned int, unsigned int> parentEdgeMap;
-		m_profileMesh.getEdgeMap(parentEdgeMap);
-
-		for (auto &loop : *activeLoopsPtr) {
-			bool sideA = true;
-			unsigned parentEdge = parentEdgeMap[loop[0]];
-
-			unsigned i = 0;
-			for (auto &baseLoop : *baseLoopsPtr) {
-				if (baseLoop.contains(parentEdge)) {
-					MVector pEdgeVector = m_baseMesh.getEdgeVector(parentEdge);
-					MVector edgeVector = m_profileMesh.getEdgeVector(loop[0]);
-
-					sideA = (pEdgeVector*edgeVector >= 0) ? true : false;
-
-					if(baseLoop.isReversed())
-						sideA = (sideA) ? false : true;
-
-					break;
-				}
-			}
-
-			std::set <OffsetParams> offsetParams = (sideA) ? offsetParamsA : offsetParamsB;
-
-			for (auto param = offsetParams.rbegin(); param != offsetParams.rend(); param++) {
-				m_profileMesh.getActiveEdges((sideA)?m_loopEdgesA[param->index]: m_loopEdgesB[param->index]);
-				if (param->stitch)
-					stitchCompData.addElements((sideA)?m_loopEdgesA[param->index]:m_loopEdgesB[param->index]);
-
-				float offsetDistance = param->distance + gap / 2;
-				bool createPolygon = (0 == param->distance && param == --offsetParams.rend()) ? false : true;
-
-				status = m_profileMesh.offsetEdgeloop(loop, offsetDistance, createPolygon);
-				CHECK_MSTATUS_AND_RETURN_IT(status);
-			}
-		}
-
-		status = compListData.add(stitchComponent);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-		status = dataBlock.outputValue(aOutStitchLines).set(compList);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
+		/*
 		// Pull loop vertices
 		for (auto param : offsetParamsA){
 			MIntArray loopVertices;
@@ -574,30 +513,35 @@ MStatus SeamsEasyNode::compute(const MPlug &plug, MDataBlock &dataBlock) {
 			status = m_profileMesh.pullVertices(loopVertices, param.depth);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 		}
-	}
+		*/
 
-	SSeamMesh extrudeMesh(m_profileMesh);
+	bool extrudeAll = dataBlock.inputValue(aExtrudeAllBoundaries).asBool();
+	float thickness = (float)dataBlock.inputValue(aExtrudeThickness).asDistance().as(MDistance::internalUnit());
+	unsigned int divisions = dataBlock.inputValue(aExtrudeDivisions).asInt();
+
 	if (thickness != 0) {
 		MIntArray edgesToExtrude;
 		if (extrudeAll)
-			extrudeMesh.getBoundaryEdges(edgesToExtrude);
+			workMesh.getBoundaryEdges(edgesToExtrude);
 		else
-			extrudeMesh.getActiveEdges(edgesToExtrude);
+			workMesh.getActiveEdges(edgesToExtrude);
 
-		status = extrudeMesh.extrudeEdges(edgesToExtrude, thickness, divisions);
+		status = workMesh.extrudeEdges(edgesToExtrude, thickness, divisions);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
 
-	for (auto &loop : m_loopEdgesA) {
+	/*
+	for (auto &loop : loopEdgesA) {
 		status = extrudeMesh.setHardEdges(loop.second, hardEdgeAngle);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
-	for (auto &loop : m_loopEdgesB) {
+	for (auto &loop : loopEdgesB) {
 		status = extrudeMesh.setHardEdges(loop.second, hardEdgeAngle);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
-
-	status = dataBlock.outputValue(aOutMesh).set(extrudeMesh.getObject());
+	*/
+	
+	status = dataBlock.outputValue(aOutMesh).set(workMesh.getObject());
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 	dataBlock.setClean(aOutMesh);
 
@@ -652,10 +596,6 @@ void SeamsEasyNode::attrChanged(MNodeMessage::AttributeMessage msg, MPlug &plug,
 	dgMod.doIt();
 	dagMod.doIt();
 	
-}
-
-SSeamMesh* SeamsEasyNode::getMeshPtr() {
-	return &m_baseMesh;
 }
 
 MStatus SeamsEasyNode::loadProfileCurveSetting(MObject& rampAttribute, float width, float depth, int subdivisions, std::set <OffsetParams> &offsetParams) {

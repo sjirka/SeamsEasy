@@ -1,4 +1,5 @@
 #include "SeamsEasyManip.h"
+#include "SeamsEasyData.h"
 
 #include <maya\MFnManip3D.h>
 #include <maya\MGlobal.h>
@@ -8,6 +9,7 @@
 #include <maya\MPlugArray.h>
 #include <maya\MDagPath.h>
 #include <maya\MItDependencyGraph.h>
+#include <maya\MFnPluginData.h>
 
 MTypeId SeamsEasyManip::id(0x0012789B);
 
@@ -30,54 +32,58 @@ MStatus SeamsEasyManip::initialize() {
 }
 
 void SeamsEasyManip::draw(M3dView& view, const MDagPath& nodePath, M3dView::DisplayStyle style, M3dView::DisplayStatus stat) {
-	
+	MStatus status;
+
 	MDagPath camPath;
 	view.getCamera(camPath);
 
-	SSeamMesh* baseMeshPtr = pluginNode->getMeshPtr();
-	if (baseMeshPtr->getObject().isNull())
-		return;
-	std::vector <SEdgeLoop> *edgeLoops = baseMeshPtr->activeLoopsPtr();
-
-
 	MFnDependencyNode fnNode(pluginNode->thisMObject());
-	MPlug outPlug = fnNode.findPlug("outMesh");
-	MItDependencyGraph itGraph(outPlug, MFn::kMesh);
-	if (itGraph.thisNode().apiType() != MFn::kMesh)
-		return;
-	MFnDagNode fnDagNode(itGraph.thisNode());
-	MDagPath path;
-	fnDagNode.getPath(path);
-	MMatrix matrix = path.inclusiveMatrix();
-
-	MFnMesh fnMesh(baseMeshPtr->getObject());
+	MFnMesh fnMesh(pluginNode->sourceMesh, &status);
+	CHECK_MSTATUS(status);
 	MPointArray positions;
-	fnMesh.getPoints(positions, MSpace::kObject);
+	fnMesh.getPoints(positions);
 
-	for (unsigned int i = 0; i < positions.length(); i++)
-		positions[i] *= matrix;
+	MItDependencyGraph itGraph(fnNode.findPlug(SeamsEasyNode::aOutMesh), MFn::kMesh);
+	MMatrix matrix;
+	if (itGraph.currentItem().apiType() == MFn::kMesh) {
+		MFnDagNode fnDag(itGraph.currentItem());
+		MDagPath path;
+		fnDag.getPath(path);
+		matrix = path.inclusiveMatrix();
+	}
 
 	view.beginGL();
 	glPushAttrib(GL_ALL_ATTRIB_BITS);
 
 	unsigned int h = firstHandle;
-	for (auto &loop : *edgeLoops) {
+	MPlug edgeLoopArrayPlug = fnNode.findPlug(SeamsEasyNode::aEdgeLoops);
+	for (unsigned i = 0; i<edgeLoopArrayPlug.numElements(); i++) {
+		MPlug edgeLoopElementPlug = edgeLoopArrayPlug.elementByLogicalIndex(i);
+		MObject data;
+		edgeLoopElementPlug.getValue(data);
+		MFnPluginData fnPluginData(data);
+
+		SeamsEasyData* edgeLoopData = (SeamsEasyData*)fnPluginData.constData(&status);
+		CHECK_MSTATUS(status);
+
+		edgeLoopData->edgeLoop.setMeshPtr(&pluginNode->sourceMesh);
+
 		colorAndName(view, h++, true, zColor());
 		MIntArray loopVertices;
 		MPointArray loopPoints;
-		loop.getVertices(loopVertices);
+		edgeLoopData->edgeLoop.getVertices(loopVertices);
 
 		glLineWidth(2);
 		glColor3f(1, 0, 1);
 		glBegin(MGL_LINE_STRIP);
 		for (unsigned int i = 0; i < loopVertices.length(); i++) {
-			loopPoints.append(positions[loopVertices[i]]);
-			glVertex3d(positions[loopVertices[i]].x, positions[loopVertices[i]].y, positions[loopVertices[i]].z);
+			loopPoints.append(positions[loopVertices[i]]*matrix);
+			glVertex3d(loopPoints[i].x, loopPoints[i].y, loopPoints[i].z);
 		}
 		glEnd();
 
-		unsigned int base = floor(loopPoints.length() / 2)-1;
-		unsigned int firstIdx = (loopPoints.length() % 2 == 1 && loop.isReversed() ) ? base + 1 : base;
+		unsigned int base = (unsigned)floor(loopPoints.length() / 2) - 1;
+		unsigned int firstIdx = (loopPoints.length() % 2 == 1 && edgeLoopData->edgeLoop.isReversed()) ? base + 1 : base;
 
 		MVector edge = loopPoints[firstIdx + 1] - loopPoints[firstIdx];
 		MVector normal;
@@ -131,39 +137,43 @@ void SeamsEasyManip::preDrawUI(const M3dView &view){
 void SeamsEasyManip::drawUI(MHWRender::MUIDrawManager& drawManager, const MHWRender::MFrameContext& frameContext) const {
 	if (pluginNode == NULL)
 		return;
-
+	MStatus status;
+	
 	MDagPath camPath = frameContext.getCurrentCameraPath();
 	
-	SSeamMesh* baseMeshPtr = pluginNode->getMeshPtr();
-	if (baseMeshPtr->getObject().isNull())
-		return;
-	std::vector <SEdgeLoop> *edgeLoops = baseMeshPtr->activeLoopsPtr();
-	
-
 	MFnDependencyNode fnNode(pluginNode->thisMObject());
-	MPlug outPlug = fnNode.findPlug("outMesh");
-	MItDependencyGraph itGraph(outPlug, MFn::kMesh);
-	if (itGraph.thisNode().apiType()!=MFn::kMesh)
-		return;
-	MFnDagNode fnDagNode(itGraph.thisNode());
-	MDagPath path;
-	fnDagNode.getPath(path);
-	MMatrix matrix = path.inclusiveMatrix();
-	
-	MFnMesh fnMesh(baseMeshPtr->getObject());
+	MFnMesh fnMesh(pluginNode->sourceMesh, &status);
 	MPointArray positions;
-	fnMesh.getPoints(positions, MSpace::kObject);
+	fnMesh.getPoints(positions);
 
-	for (unsigned int i = 0; i < positions.length(); i++)
-		positions[i] *= matrix;
+	MItDependencyGraph itGraph(fnNode.findPlug(SeamsEasyNode::aOutMesh), MFn::kMesh);
+	MMatrix matrix;
+	if (itGraph.currentItem().apiType() == MFn::kMesh) {
+		MFnDagNode fnDag(itGraph.currentItem());
+		MDagPath path;
+		fnDag.getPath(path);
+		matrix = path.inclusiveMatrix();
+	}
 
 	unsigned int h = firstHandle;
-	for (auto &loop : *edgeLoops) {
+
+	MPlug edgeLoopArrayPlug = fnNode.findPlug(SeamsEasyNode::aEdgeLoops);
+	for (unsigned i = 0; i<edgeLoopArrayPlug.numElements(); i++) {
+		MPlug edgeLoopElementPlug = edgeLoopArrayPlug.elementByLogicalIndex(i);
+		MObject data;
+		edgeLoopElementPlug.getValue(data);
+		MFnPluginData fnPluginData(data);
+
+		SeamsEasyData* edgeLoopData = (SeamsEasyData*)fnPluginData.constData(&status);
+		CHECK_MSTATUS(status);
+
+		edgeLoopData->edgeLoop.setMeshPtr(&pluginNode->sourceMesh);
+
 		MIntArray loopVertices;
 		MPointArray loopPoints;
-		loop.getVertices(loopVertices);
+		edgeLoopData->edgeLoop.getVertices(loopVertices);
 		for (unsigned int i = 0; i < loopVertices.length(); i++)
-			loopPoints.append(positions[loopVertices[i]]);
+			loopPoints.append(positions[loopVertices[i]]*matrix);
 
 		drawManager.beginDrawable();
 		drawManager.setLineWidth(2);
@@ -172,7 +182,7 @@ void SeamsEasyManip::drawUI(MHWRender::MUIDrawManager& drawManager, const MHWRen
 		drawManager.endDrawable();
 
 		unsigned int base = floor(loopPoints.length() / 2) - 1;
-		unsigned int firstIdx = (loopPoints.length() % 2 == 1 && loop.isReversed()) ? base + 1 : base;
+		unsigned int firstIdx = (loopPoints.length() % 2 == 1 && edgeLoopData->edgeLoop.isReversed()) ? base + 1 : base;
 
 		MVector edge = loopPoints[firstIdx + 1] - loopPoints[firstIdx];
 		MVector normal;
@@ -218,19 +228,28 @@ MStatus SeamsEasyManip::doRelease(M3dView& view){
 	if (pluginNode == NULL)
 		return MS::kSuccess;
 
-	SSeamMesh* baseMeshPtr = pluginNode->getMeshPtr();
-	if (baseMeshPtr->getObject().isNull())
-		return MS::kSuccess;
-	std::vector <SEdgeLoop> *edgeLoops = baseMeshPtr->activeLoopsPtr();
+	MStatus status;
 
 	MGLuint activeHandle;
 	glActiveName(activeHandle);
 	unsigned int loopId = activeHandle - firstHandle;
 
-	edgeLoops->at(loopId).reverse();
-
 	MFnDependencyNode fnNode(pluginNode->thisMObject());
-	MObject mesh = fnNode.findPlug(SeamsEasyNode::aOutMesh).asMObject();
+	MPlug edgeLoopArrayPlug = fnNode.findPlug(SeamsEasyNode::aEdgeLoops);
+
+	if (loopId >= edgeLoopArrayPlug.numElements())
+		return MS::kSuccess;
+
+	MPlug edgeLoopElementPlug = edgeLoopArrayPlug.elementByLogicalIndex(loopId);
+	MObject data;
+	edgeLoopElementPlug.getValue(data);
+	MFnPluginData fnPluginData(data);
+
+	SeamsEasyData* edgeLoopData = (SeamsEasyData*)fnPluginData.constData(&status);
+	CHECK_MSTATUS(status);
+	edgeLoopData->edgeLoop.reverse();
+
+	edgeLoopElementPlug.setValue(data);
 
 	return MS::kSuccess;
 }

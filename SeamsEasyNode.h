@@ -94,33 +94,31 @@ public:
 	static void *creator();
 	static MStatus initialize();
 
-	virtual MStatus setDependentsDirty(const MPlug &plug, MPlugArray &otherPlugs);
 	virtual MStatus compute(const MPlug &plug, MDataBlock &dataBlock);
+	
 	float remap(const float srcMin, const float srcMax, const float trgMin, const float trgMax, float value);
-
 	static void attrChanged(MNodeMessage::AttributeMessage msg, MPlug &plug, MPlug &otherPlug, void *data);
-
-	SSeamMesh* getMeshPtr();
 
 	static MTypeId id;
 
-	// Seam attributes
+	// Output
 	static MObject aOutMesh;
 	static MObject aOutStitchLines;
 	
+	// Input
 	static MObject aInMesh;
-	static MObject aSelectedEdges;
+	static MObject aEdgeLoops;
 	
+	// Settings
 	static MObject aExtrudeAllBoundaries;
 	static MObject aExtrudeThickness;
 	static MObject aExtrudeDivisions;
-	
 	static MObject aGap;
-	
 	static MObject aProfileMode;
-
 	static MObject aSymmetry;
+	static MObject aHardEdgeAngle;
 
+	// Manual profile
 	static MObject aOffsetA;
 	static MObject aOffsetADistance;
 	static MObject aOffsetADepth;
@@ -134,6 +132,7 @@ public:
 	static MObject aDistanceMultiplier;
 	static MObject aDepthMultiplier;
 
+	// Profile curve
 	static MObject aProfileAWidth;
 	static MObject aProfileADepth;
 	static MObject aProfileASubdivs;
@@ -144,29 +143,8 @@ public:
 	static MObject aProfileBSubdivs;
 	static MObject aProfileBCurve;
 
-	static MObject aHardEdgeAngle;
-
+	MObject sourceMesh;
 private:
-	MObject
-		m_component;
-	SSeamMesh
-		m_baseMesh,
-		m_workMesh,
-		m_profileMesh;
-	std::map <unsigned int, MIntArray>
-		m_loopEdgesA,
-		m_loopEdgesB;
-
 	MStatus loadProfileCurveSetting(MObject& rampAttribute, float width, float depth, int subdivisions, std::set <OffsetParams> &offsetParams);
-
 	MCallbackIdArray callbackIds;
-
-	bool
-		dirtyMesh,
-		dirtyBaseMesh,
-		dirtyProfileMesh,
-		dirtyComponent,
-		dirtyExtrude,
-		dirtyProfile;
-
 };

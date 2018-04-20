@@ -1,5 +1,6 @@
 #include "SeamsEasyCmd.h"
 #include "StitchEasyNode.h"
+#include "SeamsEasyData.h"
 
 #include <maya\MSyntax.h>
 #include <maya\MSelectionList.h>
@@ -95,6 +96,10 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 		MPlug
 			pOutputMesh;
 
+		SSeamMesh sMesh(m_path.node());
+		sMesh.setActiveEdges(component);
+		std::vector <SEdgeLoop> *loopsPtr = sMesh.activeLoopsPtr();
+
 		MPlugArray incomingConnections;
 		bool connected = fnMesh.findPlug("inMesh").connectedTo(incomingConnections, true, false);
 		if(connected)
@@ -159,12 +164,18 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 		status = m_dagMod.connect(fnNode.findPlug(SeamsEasyNode::aOutMesh), fnMesh.findPlug("inMesh"));
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MFnComponentListData compData;
-		MObject compList = compData.create();
-		compData.add(component);
-
-		status = m_dagMod.newPlugValue(fnNode.findPlug(SeamsEasyNode::aSelectedEdges), compList);
+		unsigned i = 0;
+		MPlug loopPlug = fnNode.findPlug(SeamsEasyNode::aEdgeLoops, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
+		for (auto &data : *loopsPtr) {
+			SeamsEasyData *seamsData = new SeamsEasyData;
+			seamsData->edgeLoop = data;
+
+			MPlug loopElPlug = loopPlug.elementByLogicalIndex(i++, &status);
+			CHECK_MSTATUS_AND_RETURN_IT(status);
+			status = loopElPlug.setValue(seamsData);
+			CHECK_MSTATUS_AND_RETURN_IT(status);
+		}
 	}
 
 	if (isQuery || isEdit) {

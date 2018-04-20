@@ -5,6 +5,7 @@
 #include "StitchEasyCtxCmd.h"
 #include "SeamsEasyManip.h"
 #include "SeamsEasyManipContainer.h"
+#include "SeamsEasyData.h"
 
 #include <maya\MFnPlugin.h>
 
@@ -12,6 +13,12 @@ MStatus initializePlugin(MObject object) {
 	MStatus status;
 
 	MFnPlugin fnPlugin(object, "Stepan Jirka", "1.0", "Any", &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	status = fnPlugin.registerData(
+		SeamsEasyData::typeName,
+		SeamsEasyData::id,
+		SeamsEasyData::creator);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	status = fnPlugin.registerNode(
@@ -88,6 +95,9 @@ MStatus uninitializePlugin(MObject object) {
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	status = fnPlugin.deregisterNode(SeamsEasyManipContainer::id);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	status = fnPlugin.deregisterData(SeamsEasyData::id);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	return MS::kSuccess;
