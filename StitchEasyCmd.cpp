@@ -109,7 +109,7 @@ MStatus StitchEasyCmd::doIt(const MArgList& args)
 				
 			MFnDagNode fnOutMesh(itGraph.currentItem());
 			fnOutMesh.getPath(path);
-			pOutSLines = fnInputNode.findPlug(SeamsEasyNode::aOutStitchLines);
+			pOutSLines = fnInputNode.findPlug(SeamsEasyNode::aOutStitchLines, true);
 		}
 		else{
 			MObject component;
@@ -142,15 +142,15 @@ MStatus StitchEasyCmd::doIt(const MArgList& args)
 		MFnDagNode fnMesh(path), fnNewMesh(m_shape);
 		MFnDependencyNode fnNode(m_node);
 
-		m_dagMod.connect(fnMesh.findPlug("outMesh"), fnNode.findPlug(StitchEasyNode::aInMesh));
-		m_dagMod.connect(fnMesh.findPlug("outSmoothMesh"), fnNode.findPlug(StitchEasyNode::aInSmoothMesh));
-		m_dagMod.connect(fnMesh.findPlug("displaySmoothMesh"), fnNode.findPlug(StitchEasyNode::aUseSmoothMesh));
-		m_dagMod.connect(fnNode.findPlug(StitchEasyNode::aOutMesh), fnNewMesh.findPlug("inMesh"));
+		m_dagMod.connect(fnMesh.findPlug("outMesh", true), fnNode.findPlug(StitchEasyNode::aInMesh, true));
+		m_dagMod.connect(fnMesh.findPlug("outSmoothMesh", true), fnNode.findPlug(StitchEasyNode::aInSmoothMesh, true));
+		m_dagMod.connect(fnMesh.findPlug("displaySmoothMesh", true), fnNode.findPlug(StitchEasyNode::aUseSmoothMesh, true));
+		m_dagMod.connect(fnNode.findPlug(StitchEasyNode::aOutMesh, true), fnNewMesh.findPlug("inMesh", true));
 		
 		if(!pOutSLines.isNull())
-			m_dagMod.connect(pOutSLines, fnNode.findPlug(StitchEasyNode::aStitchLines));
+			m_dagMod.connect(pOutSLines, fnNode.findPlug(StitchEasyNode::aStitchLines, true));
 		else
-			m_dagMod.newPlugValue(fnNode.findPlug(StitchEasyNode::aStitchLines), compList);
+			m_dagMod.newPlugValue(fnNode.findPlug(StitchEasyNode::aStitchLines, true), compList);
 	}
 
 	if (isQuery || isEdit) {
@@ -166,14 +166,14 @@ MStatus StitchEasyCmd::doIt(const MArgList& args)
 	if (isQuery) {
 		for (auto &flag : m_attrFlags)
 			if (argData.isFlagSet(flag.first)) {
-				queryAttrValue(fnNode.findPlug(flag.second));
+				queryAttrValue(fnNode.findPlug(flag.second, true));
 				break;
 			}
 	}
 	else if (isEdit || m_isCreation){
 		for (auto &flag : m_attrFlags)
 			if (argData.isFlagSet(flag.first))
-				setFlagAttr(argData, flag.first, fnNode.findPlug(flag.second));
+				setFlagAttr(argData, flag.first, fnNode.findPlug(flag.second, true));
 	}
 
 	return redoIt();
