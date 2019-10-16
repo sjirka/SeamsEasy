@@ -1,6 +1,5 @@
 #include "SeamsEasyCmd.h"
 #include "StitchEasyNode.h"
-#include "SeamsEasyData.h"
 
 #include <maya\MSyntax.h>
 #include <maya\MSelectionList.h>
@@ -96,17 +95,13 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 		MPlug
 			pOutputMesh;
 
-		SSeamMesh sMesh(m_path.node());
-		sMesh.setActiveEdges(component);
-		std::vector <SEdgeLoop> *loopsPtr = sMesh.activeLoopsPtr();
-
 		MPlugArray incomingConnections;
-		bool connected = fnMesh.findPlug("inMesh").connectedTo(incomingConnections, true, false);
+		bool connected = fnMesh.findPlug("inMesh", true).connectedTo(incomingConnections, true, false);
 		if(connected)
-			m_dgMod.disconnect(incomingConnections[0], fnMesh.findPlug("inMesh"));
+			m_dgMod.disconnect(incomingConnections[0], fnMesh.findPlug("inMesh", true));
 
 		MIntArray tweakOutPoints;
-		int numTweaks = fnMesh.findPlug("pnts").getExistingArrayAttributeIndices(tweakOutPoints);
+		int numTweaks = fnMesh.findPlug("pnts", true).getExistingArrayAttributeIndices(tweakOutPoints);
 
 		MObject tweakNode;
 		if (0<numTweaks) {
@@ -117,8 +112,8 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 			for (int t = 0; t < numTweaks; t++) {
 				MPlug
-					pTweakOutPoint = fnMesh.findPlug("pnts").elementByLogicalIndex(tweakOutPoints[t]),
-					pTweakInPoint = fnTweak.findPlug("tweak").elementByLogicalIndex(tweakOutPoints[t]);
+					pTweakOutPoint = fnMesh.findPlug("pnts", true).elementByLogicalIndex(tweakOutPoints[t]),
+					pTweakInPoint = fnTweak.findPlug("tweak", true).elementByLogicalIndex(tweakOutPoints[t]);
 
 				for (unsigned int c = 0; c < pTweakOutPoint.numChildren(); c++) {
 					status = m_dgMod.newPlugValueFloat(pTweakInPoint.child(c), pTweakOutPoint.child(c).asFloat());
@@ -128,10 +123,10 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 				status = m_dgMod.removeMultiInstance(pTweakOutPoint, true);
 				CHECK_MSTATUS_AND_RETURN_IT(status);
 			}
-			pOutputMesh = fnTweak.findPlug("output");
+			pOutputMesh = fnTweak.findPlug("output", true);
 
 			if(connected)
-				m_dgMod.connect(incomingConnections[0], fnTweak.findPlug("inputPolymesh"));
+				m_dgMod.connect(incomingConnections[0], fnTweak.findPlug("inputPolymesh", true));
 		}
 		else if(connected)
 			pOutputMesh = incomingConnections[0];
@@ -146,10 +141,10 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 
 			if (!tweakNode.isNull()) {
 				MFnDependencyNode fnTweak(tweakNode);
-				m_dagMod.connect(fnIntermediate.findPlug("outMesh"), fnTweak.findPlug("inputPolymesh"));
+				m_dagMod.connect(fnIntermediate.findPlug("outMesh", true), fnTweak.findPlug("inputPolymesh", true));
 			}
 			else
-				pOutputMesh = fnIntermediate.findPlug("outMesh");
+				pOutputMesh = fnIntermediate.findPlug("outMesh", true);
 		}
 
 	
@@ -159,23 +154,17 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 			fnNode(m_node);
 		fnNode.setName((name == "") ? "seamsEasy" : name);
 
-		status = m_dagMod.connect(pOutputMesh, fnNode.findPlug(SeamsEasyNode::aInMesh));
+		status = m_dagMod.connect(pOutputMesh, fnNode.findPlug(SeamsEasyNode::aInMesh, true));
 		CHECK_MSTATUS_AND_RETURN_IT(status);
-		status = m_dagMod.connect(fnNode.findPlug(SeamsEasyNode::aOutMesh), fnMesh.findPlug("inMesh"));
+		status = m_dagMod.connect(fnNode.findPlug(SeamsEasyNode::aOutMesh, true), fnMesh.findPlug("inMesh", true));
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		unsigned i = 0;
-		MPlug loopPlug = fnNode.findPlug(SeamsEasyNode::aEdgeLoops, &status);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-		for (auto &data : *loopsPtr) {
-			SeamsEasyData *seamsData = new SeamsEasyData;
-			seamsData->edgeLoop = data;
+		MFnComponentListData compData;
+		MObject compList = compData.create();
+		compData.add(component);
 
-			MPlug loopElPlug = loopPlug.elementByLogicalIndex(i++, &status);
-			CHECK_MSTATUS_AND_RETURN_IT(status);
-			status = loopElPlug.setValue(seamsData);
-			CHECK_MSTATUS_AND_RETURN_IT(status);
-		}
+		status = m_dagMod.newPlugValue(fnNode.findPlug(SeamsEasyNode::aSelectedEdges, true), compList);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
 
 	if (isQuery || isEdit) {
@@ -191,17 +180,17 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 	if (isQuery) {
 		for (auto &flag : m_attrFlags)
 			if (argData.isFlagSet(flag.first)) {
-				queryAttrValue(fnNode.findPlug(flag.second));
+				queryAttrValue(fnNode.findPlug(flag.second, true));
 				break;
 			}
 	}
 	else if (isEdit || m_isCreation) {
 		for (auto &flag : m_attrFlags)
 			if (argData.isFlagSet(flag.first))
-				setFlagAttr(argData, flag.first, fnNode.findPlug(flag.second));
+				setFlagAttr(argData, flag.first, fnNode.findPlug(flag.second, true));
 
 		if (argData.isFlagSet(ADDLOOP_FLAG)) {
-			MPlug offset = fnNode.findPlug(SeamsEasyNode::aOffsetA);
+			MPlug offset = fnNode.findPlug(SeamsEasyNode::aOffset, true);
 			MIntArray indices;
 			int lowestAvId = (offset.getExistingArrayAttributeIndices(indices) == 0) ? 0 : indices[indices.length() - 1] + 1;
 
@@ -209,13 +198,13 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 				MArgList argList;
 				argData.getFlagArgumentList(ADDLOOP_FLAG, i, argList);
 
-				MPlug pDistance = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetADistance);
+				MPlug pDistance = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetDistance);
 				m_dgMod.newPlugValueMDistance(pDistance, argList.asDistance(0));
 
-				MPlug pDepth = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetADepth);
+				MPlug pDepth = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetDepth);
 				m_dgMod.newPlugValueMDistance(pDepth, argList.asDistance(1));
 
-				MPlug pStitch = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetAStitch);
+				MPlug pStitch = offset.elementByLogicalIndex(lowestAvId).child(SeamsEasyNode::aOffsetStitch);
 				m_dgMod.newPlugValueBool(pDepth, argList.asBool(2));
 
 				lowestAvId++;
@@ -236,36 +225,35 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 				return status;
 			}
 
-			std::set <OffsetParams> offsetParamsA;
+			std::set <OffsetParams> offsetParams;
 
-			MPlug pOffset = fnNode.findPlug(SeamsEasyNode::aOffsetA);
+			MPlug pOffset = fnNode.findPlug(SeamsEasyNode::aOffset, true);
 			MIntArray offsetIndices;
 
 			for (unsigned int i = 0; i < pOffset.getExistingArrayAttributeIndices(offsetIndices); i++) {
 				MPlug pOffsetElement = pOffset.elementByLogicalIndex(offsetIndices[i]);
 				OffsetParams offsetParam(
-					pOffsetElement.child(SeamsEasyNode::aOffsetADistance).asFloat(),
-					pOffsetElement.child(SeamsEasyNode::aOffsetADepth).asFloat(),
-					pOffsetElement.child(SeamsEasyNode::aOffsetAStitch).asBool(),
+					pOffsetElement.child(SeamsEasyNode::aOffsetDistance).asFloat(),
+					pOffsetElement.child(SeamsEasyNode::aOffsetDepth).asFloat(),
+					pOffsetElement.child(SeamsEasyNode::aOffsetStitch).asBool(),
 					offsetIndices[i]
 				);
 
-				offsetParamsA.insert(offsetParam);
+				offsetParams.insert(offsetParam);
 			}
 
 			if (order == "asc" || order == "desc") {
-				auto param = offsetParamsA.begin();
-				auto rparam = offsetParamsA.rbegin();
+				auto param = offsetParams.begin();
+				auto rparam = offsetParams.rbegin();
 
 				for (unsigned int i = 0; i < offsetIndices.length(); i++) {
 					MPlug pOffsetElement = pOffset.elementByLogicalIndex(offsetIndices[i]);
-					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetADistance), (order == "asc") ? param->distance : rparam->distance);
-					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetADepth), (order == "asc") ? param->depth : rparam->depth);
-					m_dagMod.newPlugValueBool(pOffsetElement.child(SeamsEasyNode::aOffsetAStitch), (order == "asc") ? param->stitch : rparam->stitch);
+					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetDistance), (order == "asc") ? param->distance : rparam->distance);
+					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetDepth), (order == "asc") ? param->depth : rparam->depth);
+					m_dagMod.newPlugValueBool(pOffsetElement.child(SeamsEasyNode::aOffsetStitch), (order == "asc") ? param->stitch : rparam->stitch);
 					param++; rparam++;
 				}
 			}
-
 			else {
 				displayError("invalid value");
 				setResult(false);
