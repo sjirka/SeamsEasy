@@ -2,14 +2,14 @@
 
 #include "SSeamMesh.h"
 
-#include <maya\MPxNode.h>
-#include <maya\MItMeshPolygon.h>
-#include <maya\MItMeshEdge.h>
-#include <maya\MItMeshVertex.h>
-#include <maya\MDagPath.h>
-#include <maya\MNodeMessage.h>
-#include <maya\MObjectArray.h>
-#include <maya\MCallbackIdArray.h>
+#include <maya/MPxNode.h>
+#include <maya/MItMeshPolygon.h>
+#include <maya/MItMeshEdge.h>
+#include <maya/MItMeshVertex.h>
+#include <maya/MDagPath.h>
+#include <maya/MNodeMessage.h>
+#include <maya/MObjectArray.h>
+#include <maya/MCallbackIdArray.h>
 
 #include <set>
 #include <map>
@@ -94,57 +94,61 @@ public:
 	static void *creator();
 	static MStatus initialize();
 
+	virtual MStatus setDependentsDirty(const MPlug &plug, MPlugArray &otherPlugs);
 	virtual MStatus compute(const MPlug &plug, MDataBlock &dataBlock);
-	
 	float remap(const float srcMin, const float srcMax, const float trgMin, const float trgMax, float value);
+
 	static void attrChanged(MNodeMessage::AttributeMessage msg, MPlug &plug, MPlug &otherPlug, void *data);
 
 	static MTypeId id;
 
-	// Output
+	// Seam attributes
 	static MObject aOutMesh;
 	static MObject aOutStitchLines;
 	
-	// Input
 	static MObject aInMesh;
-	static MObject aEdgeLoops;
+	static MObject aSelectedEdges;
 	
-	// Settings
 	static MObject aExtrudeAllBoundaries;
 	static MObject aExtrudeThickness;
 	static MObject aExtrudeDivisions;
+	
 	static MObject aGap;
+	
 	static MObject aProfileMode;
-	static MObject aSymmetry;
-	static MObject aHardEdgeAngle;
 
-	// Manual profile
-	static MObject aOffsetA;
-	static MObject aOffsetADistance;
-	static MObject aOffsetADepth;
-	static MObject aOffsetAStitch;
-
-	static MObject aOffsetB;
-	static MObject aOffsetBDistance;
-	static MObject aOffsetBDepth;
-	static MObject aOffsetBStitch;
+	static MObject aOffset;
+	static MObject aOffsetDistance;
+	static MObject aOffsetDepth;
+	static MObject aOffsetStitch;
 
 	static MObject aDistanceMultiplier;
 	static MObject aDepthMultiplier;
 
-	// Profile curve
-	static MObject aProfileAWidth;
-	static MObject aProfileADepth;
-	static MObject aProfileASubdivs;
-	static MObject aProfileACurve;
+	static MObject aProfileWidth;
+	static MObject aProfileDepth;
+	static MObject aProfileSubdivs;
+	static MObject aProfileCurve;
 
-	static MObject aProfileBWidth;
-	static MObject aProfileBDepth;
-	static MObject aProfileBSubdivs;
-	static MObject aProfileBCurve;
+	static MObject aHardEdgeAngle;
 
-	MObject sourceMesh;
 private:
-	MStatus loadProfileCurveSetting(MObject& rampAttribute, float width, float depth, int subdivisions, std::set <OffsetParams> &offsetParams);
+	MObject
+		m_sourceMesh,
+		m_component;
+	SSeamMesh
+		m_baseMesh,
+		m_profileMesh;
+	std::map <unsigned int, MIntArray> m_loopEdges;
+
 	MCallbackIdArray callbackIds;
+
+	bool
+		dirtyMesh,
+		dirtyBaseMesh,
+		dirtyProfileMesh,
+		dirtyComponent,
+		dirtyExtrude,
+		dirtyProfile;
+
 };

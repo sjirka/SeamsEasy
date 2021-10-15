@@ -2,7 +2,7 @@
 
 #include "StitchEasyCtx.h"
 
-#include <maya\MPxContextCommand.h>
+#include <maya/MPxContextCommand.h>
 
 class StitchEasyCtxCmd : public MPxContextCommand
 {

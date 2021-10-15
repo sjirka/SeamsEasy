@@ -1,21 +1,21 @@
 #include "StitchEasyCmd.h"
 #include "StitchEasyNode.h"
 #include "SeamsEasyNode.h"
-#include "../_library/SShadingGroup.h"
+#include "SShadingGroup.h"
 #include "SNode.h"
 
-#include <maya\MSyntax.h>
-#include <maya\MSelectionList.h>
-#include <maya\MItSelectionList.h>
-#include <maya\MDagPath.h>
-#include <maya\MFnDagNode.h>
-#include <maya\MGlobal.h>
-#include <maya\MFnComponentListData.h>
-#include <maya\MFnSet.h>
-#include <maya\MFnTransform.h>
-#include <maya\MMatrix.h>
-#include <maya\MArgList.h>
-#include <maya\MItDependencyGraph.h>
+#include <maya/MSyntax.h>
+#include <maya/MSelectionList.h>
+#include <maya/MItSelectionList.h>
+#include <maya/MDagPath.h>
+#include <maya/MFnDagNode.h>
+#include <maya/MGlobal.h>
+#include <maya/MFnComponentListData.h>
+#include <maya/MFnSet.h>
+#include <maya/MFnTransform.h>
+#include <maya/MMatrix.h>
+#include <maya/MArgList.h>
+#include <maya/MItDependencyGraph.h>
 
 StitchEasyCmd::StitchEasyCmd()
 {
@@ -100,7 +100,8 @@ MStatus StitchEasyCmd::doIt(const MArgList& args)
 			}
 
 			MFnDependencyNode fnInputNode(seamNode);
-			MItDependencyGraph itGraph(fnInputNode.findPlug(SeamsEasyNode::aOutMesh), MFn::kMesh);
+			MPlug aom = fnInputNode.findPlug(SeamsEasyNode::aOutMesh, false);
+			MItDependencyGraph itGraph(aom, MFn::kMesh);
 			if (itGraph.isDone()) {
 				displayError("Source mesh not found");
 				setResult(false);
@@ -109,7 +110,7 @@ MStatus StitchEasyCmd::doIt(const MArgList& args)
 				
 			MFnDagNode fnOutMesh(itGraph.currentItem());
 			fnOutMesh.getPath(path);
-			pOutSLines = fnInputNode.findPlug(SeamsEasyNode::aOutStitchLines, true);
+			pOutSLines = fnInputNode.findPlug(SeamsEasyNode::aOutStitchLines, false);
 		}
 		else{
 			MObject component;
@@ -142,15 +143,15 @@ MStatus StitchEasyCmd::doIt(const MArgList& args)
 		MFnDagNode fnMesh(path), fnNewMesh(m_shape);
 		MFnDependencyNode fnNode(m_node);
 
-		m_dagMod.connect(fnMesh.findPlug("outMesh", true), fnNode.findPlug(StitchEasyNode::aInMesh, true));
-		m_dagMod.connect(fnMesh.findPlug("outSmoothMesh", true), fnNode.findPlug(StitchEasyNode::aInSmoothMesh, true));
-		m_dagMod.connect(fnMesh.findPlug("displaySmoothMesh", true), fnNode.findPlug(StitchEasyNode::aUseSmoothMesh, true));
-		m_dagMod.connect(fnNode.findPlug(StitchEasyNode::aOutMesh, true), fnNewMesh.findPlug("inMesh", true));
+		m_dagMod.connect(fnMesh.findPlug("outMesh", false), fnNode.findPlug(StitchEasyNode::aInMesh, false));
+		m_dagMod.connect(fnMesh.findPlug("outSmoothMesh", false), fnNode.findPlug(StitchEasyNode::aInSmoothMesh, false));
+		m_dagMod.connect(fnMesh.findPlug("displaySmoothMesh", false), fnNode.findPlug(StitchEasyNode::aUseSmoothMesh, false));
+		m_dagMod.connect(fnNode.findPlug(StitchEasyNode::aOutMesh, false), fnNewMesh.findPlug("inMesh", false));
 		
 		if(!pOutSLines.isNull())
-			m_dagMod.connect(pOutSLines, fnNode.findPlug(StitchEasyNode::aStitchLines, true));
+			m_dagMod.connect(pOutSLines, fnNode.findPlug(StitchEasyNode::aStitchLines, false));
 		else
-			m_dagMod.newPlugValue(fnNode.findPlug(StitchEasyNode::aStitchLines, true), compList);
+			m_dagMod.newPlugValue(fnNode.findPlug(StitchEasyNode::aStitchLines, false), compList);
 	}
 
 	if (isQuery || isEdit) {
@@ -166,14 +167,17 @@ MStatus StitchEasyCmd::doIt(const MArgList& args)
 	if (isQuery) {
 		for (auto &flag : m_attrFlags)
 			if (argData.isFlagSet(flag.first)) {
-				queryAttrValue(fnNode.findPlug(flag.second, true));
+				MPlug fs = fnNode.findPlug(flag.second, false);
+				queryAttrValue(fs);
 				break;
 			}
 	}
 	else if (isEdit || m_isCreation){
 		for (auto &flag : m_attrFlags)
-			if (argData.isFlagSet(flag.first))
-				setFlagAttr(argData, flag.first, fnNode.findPlug(flag.second, true));
+			if (argData.isFlagSet(flag.first)){
+				MPlug as = fnNode.findPlug(flag.second, false);
+				setFlagAttr(argData, flag.first, as);
+			}
 	}
 
 	return redoIt();
@@ -207,7 +211,8 @@ MStatus StitchEasyCmd::redoIt()
 
 		setResult(resultArray);
 
-		MGlobal::select(path.node(), MGlobal::kReplaceList);
+		MObject pn = path.node();
+		MGlobal::select(pn, MGlobal::kReplaceList);
 	}
 
 	return MS::kSuccess;

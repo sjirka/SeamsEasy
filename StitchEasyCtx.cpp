@@ -1,11 +1,11 @@
 #include "StitchEasyCtx.h"
 #include "StitchEasyNode.h"
 
-#include <maya\MGlobal.h>
-#include <maya\MFnDependencyNode.h>
-#include <maya\MSelectionList.h>
-#include <maya\MItSelectionList.h>
-#include <maya\MDagPath.h>
+#include <maya/MGlobal.h>
+#include <maya/MFnDependencyNode.h>
+#include <maya/MSelectionList.h>
+#include <maya/MItSelectionList.h>
+#include <maya/MDagPath.h>
 
 StitchEasyCtx::StitchEasyCtx(){
 	setTitleString("StitchEasy");

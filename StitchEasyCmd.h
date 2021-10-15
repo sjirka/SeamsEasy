@@ -2,13 +2,13 @@
 
 #include "StitchEasyNode.h"
 
-#include <maya\MPxCommand.h>
-#include <maya\MDGModifier.h>
-#include <maya\MDagModifier.h>
-#include <maya\MDagPath.h>
-#include <maya\MDistance.h>
-#include <maya\MAngle.h>
-#include <maya\MArgDatabase.h>
+#include <maya/MPxCommand.h>
+#include <maya/MDGModifier.h>
+#include <maya/MDagModifier.h>
+#include <maya/MDagPath.h>
+#include <maya/MDistance.h>
+#include <maya/MAngle.h>
+#include <maya/MArgDatabase.h>
 
 #include <map>
 

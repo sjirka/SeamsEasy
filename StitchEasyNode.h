@@ -2,10 +2,10 @@
 
 #include "SMesh.h"
 
-#include <maya\MPxNode.h>
-#include <maya\MFnComponentListData.h>
-#include <maya\MFnSingleIndexedComponent.h>
-#include <maya\MMatrix.h>
+#include <maya/MPxNode.h>
+#include <maya/MFnComponentListData.h>
+#include <maya/MFnSingleIndexedComponent.h>
+#include <maya/MMatrix.h>
 
 class StitchEasyNode : public MPxNode
 {
@@ -63,7 +63,7 @@ private:
 		m_stitchMesh;
 
 	SMesh
-		m_workMesh,
+		m_baseMesh,
 		m_smoothMesh;
 
 	bool

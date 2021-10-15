@@ -3,11 +3,8 @@
 #include "StitchEasyNode.h"
 #include "StitchEasyCmd.h"
 #include "StitchEasyCtxCmd.h"
-#include "SeamsEasyManip.h"
-#include "SeamsEasyManipContainer.h"
-#include "SeamsEasyData.h"
 
-#include <maya\MFnPlugin.h>
+#include <maya/MFnPlugin.h>
 
 MStatus initializePlugin(MObject object) {
 	MStatus status;
@@ -15,57 +12,19 @@ MStatus initializePlugin(MObject object) {
 	MFnPlugin fnPlugin(object, "Stepan Jirka", "1.0", "Any", &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	status = fnPlugin.registerData(
-		SeamsEasyData::typeName,
-		SeamsEasyData::id,
-		SeamsEasyData::creator);
+	status = fnPlugin.registerNode("stitchEasy", StitchEasyNode::id, StitchEasyNode::creator, StitchEasyNode::initialize);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	status = fnPlugin.registerNode(
-		"stitchEasy",
-		StitchEasyNode::id,
-		StitchEasyNode::creator,
-		StitchEasyNode::initialize);
+	status = fnPlugin.registerNode("seamsEasy", SeamsEasyNode::id, SeamsEasyNode::creator, SeamsEasyNode::initialize);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	status = fnPlugin.registerNode(
-		"seamsEasy",
-		SeamsEasyNode::id,
-		SeamsEasyNode::creator,
-		SeamsEasyNode::initialize);
+	status = fnPlugin.registerCommand("stitchEasy", StitchEasyCmd::creator, StitchEasyCmd::newSyntax);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	status = fnPlugin.registerCommand(
-		"stitchEasy",
-		StitchEasyCmd::creator,
-		StitchEasyCmd::newSyntax);
+	status = fnPlugin.registerCommand("seamsEasy", SeamsEasyCmd::creator, SeamsEasyCmd::newSyntax);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	status = fnPlugin.registerCommand(
-		"seamsEasy",
-		SeamsEasyCmd::creator,
-		SeamsEasyCmd::newSyntax);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	status = fnPlugin.registerContextCommand(
-		"stitchEasyCtx",
-		StitchEasyCtxCmd::creator);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	status = fnPlugin.registerNode(
-		"seamsEasyManip",
-		SeamsEasyManipContainer::id,
-		SeamsEasyManipContainer::creator,
-		SeamsEasyManipContainer::initialize,
-		MPxNode::kManipContainer);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	status = fnPlugin.registerNode(
-		"seamEasyLoopManip",
-		SeamsEasyManip::id,
-		SeamsEasyManip::creator,
-		SeamsEasyManip::initialize,
-		MPxNode::kManipulatorNode);
+	status = fnPlugin.registerContextCommand("stitchEasyCtx", StitchEasyCtxCmd::creator);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	return MS::kSuccess;
@@ -89,15 +48,6 @@ MStatus uninitializePlugin(MObject object) {
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	status = fnPlugin.deregisterCommand("seamsEasy");
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	status = fnPlugin.deregisterNode(SeamsEasyManip::id);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	status = fnPlugin.deregisterNode(SeamsEasyManipContainer::id);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	status = fnPlugin.deregisterData(SeamsEasyData::id);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	return MS::kSuccess;

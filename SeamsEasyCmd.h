@@ -3,13 +3,13 @@
 #include "SeamsEasyNode.h"
 #include "SNode.h"
 
-#include <maya\MPxCommand.h>
-#include <maya\MDGModifier.h>
-#include <maya\MDagModifier.h>
-#include <maya\MDagPath.h>
-#include <maya\MDistance.h>
-#include <maya\MArgDatabase.h>
-#include <maya\MPlugArray.h>
+#include <maya/MPxCommand.h>
+#include <maya/MDGModifier.h>
+#include <maya/MDagModifier.h>
+#include <maya/MDagPath.h>
+#include <maya/MDistance.h>
+#include <maya/MArgDatabase.h>
+#include <maya/MPlugArray.h>
 
 #include <map>
 
@@ -89,9 +89,9 @@ private:
 		{ EXTRUDEALL_FLAG, SeamsEasyNode::aExtrudeAllBoundaries },
 		{ GAP_FLAG, SeamsEasyNode::aGap },
 		{ MODE_FLAG, SeamsEasyNode::aProfileMode },
-		{ WIDTH_FLAG,SeamsEasyNode::aProfileAWidth },
-		{ DEPTH_FLAG, SeamsEasyNode::aProfileADepth },
-		{ SUBDIVS_FLAG, SeamsEasyNode::aProfileASubdivs },
+		{ WIDTH_FLAG,SeamsEasyNode::aProfileWidth },
+		{ DEPTH_FLAG, SeamsEasyNode::aProfileDepth },
+		{ SUBDIVS_FLAG, SeamsEasyNode::aProfileSubdivs },
 		{ DISTANCEMULTI_FLAG, SeamsEasyNode::aDistanceMultiplier },
 		{ DEPTHMULTI_FLAG, SeamsEasyNode::aDepthMultiplier },
 		{ HARDEDGEANGLE_FLAG, SeamsEasyNode::aHardEdgeAngle },

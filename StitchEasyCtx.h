@@ -1,5 +1,5 @@
 #pragma once
-#include <maya\MPxSelectionContext.h>
+#include <maya/MPxSelectionContext.h>
 
 class StitchEasyCtx : public MPxSelectionContext
 {

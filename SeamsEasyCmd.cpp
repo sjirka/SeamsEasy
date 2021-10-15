@@ -1,20 +1,20 @@
 #include "SeamsEasyCmd.h"
 #include "StitchEasyNode.h"
 
-#include <maya\MSyntax.h>
-#include <maya\MSelectionList.h>
-#include <maya\MItSelectionList.h>
-#include <maya\MDagPath.h>
-#include <maya\MFnDependencyNode.h>
-#include <maya\MFnDagNode.h>
-#include <maya\MGlobal.h>
-#include <maya\MFnComponentListData.h>
-#include <maya\MFnSet.h>
-#include <maya\MFnTransform.h>
-#include <maya\MMatrix.h>
-#include <maya\MItDependencyNodes.h>
-#include <maya\MArgList.h>
-#include <maya\MAngle.h>
+#include <maya/MSyntax.h>
+#include <maya/MSelectionList.h>
+#include <maya/MItSelectionList.h>
+#include <maya/MDagPath.h>
+#include <maya/MFnDependencyNode.h>
+#include <maya/MFnDagNode.h>
+#include <maya/MGlobal.h>
+#include <maya/MFnComponentListData.h>
+#include <maya/MFnSet.h>
+#include <maya/MFnTransform.h>
+#include <maya/MMatrix.h>
+#include <maya/MItDependencyNodes.h>
+#include <maya/MArgList.h>
+#include <maya/MAngle.h>
 
 SeamsEasyCmd::SeamsEasyCmd()
 {
@@ -96,12 +96,12 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 			pOutputMesh;
 
 		MPlugArray incomingConnections;
-		bool connected = fnMesh.findPlug("inMesh", true).connectedTo(incomingConnections, true, false);
+		bool connected = fnMesh.findPlug("inMesh", false).connectedTo(incomingConnections, true, false);
 		if(connected)
-			m_dgMod.disconnect(incomingConnections[0], fnMesh.findPlug("inMesh", true));
+			m_dgMod.disconnect(incomingConnections[0], fnMesh.findPlug("inMesh", false));
 
 		MIntArray tweakOutPoints;
-		int numTweaks = fnMesh.findPlug("pnts", true).getExistingArrayAttributeIndices(tweakOutPoints);
+		int numTweaks = fnMesh.findPlug("pnts", false).getExistingArrayAttributeIndices(tweakOutPoints);
 
 		MObject tweakNode;
 		if (0<numTweaks) {
@@ -112,8 +112,8 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 			for (int t = 0; t < numTweaks; t++) {
 				MPlug
-					pTweakOutPoint = fnMesh.findPlug("pnts", true).elementByLogicalIndex(tweakOutPoints[t]),
-					pTweakInPoint = fnTweak.findPlug("tweak", true).elementByLogicalIndex(tweakOutPoints[t]);
+					pTweakOutPoint = fnMesh.findPlug("pnts", false).elementByLogicalIndex(tweakOutPoints[t]),
+					pTweakInPoint = fnTweak.findPlug("tweak", false).elementByLogicalIndex(tweakOutPoints[t]);
 
 				for (unsigned int c = 0; c < pTweakOutPoint.numChildren(); c++) {
 					status = m_dgMod.newPlugValueFloat(pTweakInPoint.child(c), pTweakOutPoint.child(c).asFloat());
@@ -123,10 +123,10 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 				status = m_dgMod.removeMultiInstance(pTweakOutPoint, true);
 				CHECK_MSTATUS_AND_RETURN_IT(status);
 			}
-			pOutputMesh = fnTweak.findPlug("output", true);
+			pOutputMesh = fnTweak.findPlug("output", false);
 
 			if(connected)
-				m_dgMod.connect(incomingConnections[0], fnTweak.findPlug("inputPolymesh", true));
+				m_dgMod.connect(incomingConnections[0], fnTweak.findPlug("inputPolymesh", false));
 		}
 		else if(connected)
 			pOutputMesh = incomingConnections[0];
@@ -141,10 +141,10 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 
 			if (!tweakNode.isNull()) {
 				MFnDependencyNode fnTweak(tweakNode);
-				m_dagMod.connect(fnIntermediate.findPlug("outMesh", true), fnTweak.findPlug("inputPolymesh", true));
+				m_dagMod.connect(fnIntermediate.findPlug("outMesh", false), fnTweak.findPlug("inputPolymesh", false));
 			}
 			else
-				pOutputMesh = fnIntermediate.findPlug("outMesh", true);
+				pOutputMesh = fnIntermediate.findPlug("outMesh", false);
 		}
 
 	
@@ -154,16 +154,16 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 			fnNode(m_node);
 		fnNode.setName((name == "") ? "seamsEasy" : name);
 
-		status = m_dagMod.connect(pOutputMesh, fnNode.findPlug(SeamsEasyNode::aInMesh, true));
+		status = m_dagMod.connect(pOutputMesh, fnNode.findPlug(SeamsEasyNode::aInMesh, false));
 		CHECK_MSTATUS_AND_RETURN_IT(status);
-		status = m_dagMod.connect(fnNode.findPlug(SeamsEasyNode::aOutMesh, true), fnMesh.findPlug("inMesh", true));
+		status = m_dagMod.connect(fnNode.findPlug(SeamsEasyNode::aOutMesh, false), fnMesh.findPlug("inMesh", false));
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MFnComponentListData compData;
 		MObject compList = compData.create();
 		compData.add(component);
 
-		status = m_dagMod.newPlugValue(fnNode.findPlug(SeamsEasyNode::aSelectedEdges, true), compList);
+		status = m_dagMod.newPlugValue(fnNode.findPlug(SeamsEasyNode::aSelectedEdges, false), compList);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
 
@@ -180,17 +180,20 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 	if (isQuery) {
 		for (auto &flag : m_attrFlags)
 			if (argData.isFlagSet(flag.first)) {
-				queryAttrValue(fnNode.findPlug(flag.second, true));
+				MPlug fs = fnNode.findPlug(flag.second, false);
+				queryAttrValue(fs);
 				break;
 			}
 	}
 	else if (isEdit || m_isCreation) {
-		for (auto &flag : m_attrFlags)
-			if (argData.isFlagSet(flag.first))
-				setFlagAttr(argData, flag.first, fnNode.findPlug(flag.second, true));
-
+		for (auto &flag : m_attrFlags){
+			if (argData.isFlagSet(flag.first)){
+				MPlug fs = fnNode.findPlug(flag.second, false);
+				setFlagAttr(argData, flag.first, fs);
+			}
+		}
 		if (argData.isFlagSet(ADDLOOP_FLAG)) {
-			MPlug offset = fnNode.findPlug(SeamsEasyNode::aOffset, true);
+			MPlug offset = fnNode.findPlug(SeamsEasyNode::aOffset, false);
 			MIntArray indices;
 			int lowestAvId = (offset.getExistingArrayAttributeIndices(indices) == 0) ? 0 : indices[indices.length() - 1] + 1;
 
@@ -227,7 +230,7 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 
 			std::set <OffsetParams> offsetParams;
 
-			MPlug pOffset = fnNode.findPlug(SeamsEasyNode::aOffset, true);
+			MPlug pOffset = fnNode.findPlug(SeamsEasyNode::aOffset, false);
 			MIntArray offsetIndices;
 
 			for (unsigned int i = 0; i < pOffset.getExistingArrayAttributeIndices(offsetIndices); i++) {

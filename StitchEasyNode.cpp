@@ -1,11 +1,11 @@
 #include "StitchEasyNode.h"
 
-#include <maya\MFnNumericAttribute.h>
-#include <maya\MFnTypedAttribute.h>
-#include <maya\MFnCompoundAttribute.h>
-#include <maya\MFnUnitAttribute.h>
-#include <maya\MItDependencyGraph.h>
-#include <maya\MAngle.h>
+#include <maya/MFnNumericAttribute.h>
+#include <maya/MFnTypedAttribute.h>
+#include <maya/MFnCompoundAttribute.h>
+#include <maya/MFnUnitAttribute.h>
+#include <maya/MItDependencyGraph.h>
+#include <maya/MAngle.h>
 
 MTypeId StitchEasyNode::id(0x00127892);
 
@@ -94,7 +94,7 @@ MStatus StitchEasyNode::initialize() {
 	attributeAffects(aUseCustomGeometry, aOutMesh);
 
 	// Parameters
-	aDistance = uAttr.create("distanceB", "distanceB", MFnUnitAttribute::kDistance, 0.5);
+	aDistance = uAttr.create("distance", "distance", MFnUnitAttribute::kDistance, 0.5);
 	uAttr.setMin(0.001);
 	uAttr.setSoftMin(0.1);
 	uAttr.setSoftMax(10);
@@ -268,7 +268,7 @@ MStatus StitchEasyNode::compute(const MPlug &plug, MDataBlock &datablock) {
 		m_dirtySourceMesh = false;
 		m_dirtySmoothMesh = true;
 		if(!m_dirtyBaseMesh) {
-			status = m_workMesh.updateMesh(m_sourceMesh);
+			status = m_baseMesh.updateMesh(m_sourceMesh);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 		}
 		else {
@@ -278,9 +278,9 @@ MStatus StitchEasyNode::compute(const MPlug &plug, MDataBlock &datablock) {
 			MIntArray edges;
 			fnComponent.getElements(edges);
 
-			m_workMesh = SMesh(m_sourceMesh, &status);
+			m_baseMesh = SMesh(m_sourceMesh, &status);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
-			status = m_workMesh.setActiveEdges(edges);
+			status = m_baseMesh.setActiveEdges(edges);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 		}
 	}
@@ -292,11 +292,11 @@ MStatus StitchEasyNode::compute(const MPlug &plug, MDataBlock &datablock) {
 		MObject smoothMesh = datablock.inputValue(aInSmoothMesh).asMesh();
 		bool useSmoothMesh = datablock.inputValue(aUseSmoothMesh).asBool();
 
-		m_smoothMesh = SMesh(m_workMesh);
+		m_smoothMesh = SMesh(m_baseMesh);
 		if (useSmoothMesh) {
 			MFnDependencyNode fnNode(thisMObject());
-
-			MItDependencyGraph itGraph(fnNode.findPlug(aInMesh), MFn::kMesh, MItDependencyGraph::kUpstream, MItDependencyGraph::kBreadthFirst);
+			MPlug aim = fnNode.findPlug(aInMesh, false);
+			MItDependencyGraph itGraph(aim, MFn::kMesh, MItDependencyGraph::kUpstream, MItDependencyGraph::kBreadthFirst);
 			if (itGraph.isDone())
 				return MS::kInvalidParameter;
 

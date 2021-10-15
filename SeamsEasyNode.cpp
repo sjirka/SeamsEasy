@@ -3,26 +3,26 @@
 #include "SNode.h"
 #include "SPlane.h"
 
-#include <maya\MFnNumericAttribute.h>
-#include <maya\MFnTypedAttribute.h>
-#include <maya\MFnCompoundAttribute.h>
-#include <maya\MFnComponentListData.h>
-#include <maya\MFnMesh.h>
-#include <maya\MFnMeshData.h>
-#include <maya\MFnSingleIndexedComponent.h>
-#include <maya\MGlobal.h>
-#include <maya\MPointArray.h>
-#include <maya\MFloatPointArray.h>
-#include <maya\MPlugArray.h>
-#include <maya\MFnSet.h>
-#include <maya\MFnEnumAttribute.h>
-#include <maya\MFnUnitAttribute.h>
-#include <maya\MRampAttribute.h>
-#include <maya\MDistance.h>
-#include <maya\MDGModifier.h>
-#include <maya\MDagModifier.h>
-#include <maya\MItDependencyGraph.h>
-#include <maya\MAngle.h>
+#include <maya/MFnNumericAttribute.h>
+#include <maya/MFnTypedAttribute.h>
+#include <maya/MFnCompoundAttribute.h>
+#include <maya/MFnComponentListData.h>
+#include <maya/MFnMesh.h>
+#include <maya/MFnMeshData.h>
+#include <maya/MFnSingleIndexedComponent.h>
+#include <maya/MGlobal.h>
+#include <maya/MPointArray.h>
+#include <maya/MFloatPointArray.h>
+#include <maya/MPlugArray.h>
+#include <maya/MFnSet.h>
+#include <maya/MFnEnumAttribute.h>
+#include <maya/MFnUnitAttribute.h>
+#include <maya/MRampAttribute.h>
+#include <maya/MDistance.h>
+#include <maya/MDGModifier.h>
+#include <maya/MDagModifier.h>
+#include <maya/MItDependencyGraph.h>
+#include <maya/MAngle.h>
 
 MTypeId SeamsEasyNode::id(0x00127891);
 
@@ -60,7 +60,8 @@ SeamsEasyNode::SeamsEasyNode(){
 }
 
 void SeamsEasyNode::postConstructor(){
-	callbackIds.append(MNodeMessage::addAttributeChangedCallback(thisMObject(), attrChanged, NULL));
+	MObject mThisMObject = thisMObject();
+	callbackIds.append(MNodeMessage::addAttributeChangedCallback(mThisMObject, attrChanged, NULL));
 
 	// Set default profile curve shape
 	MRampAttribute rAttr(thisMObject(), aProfileCurve);
@@ -496,7 +497,7 @@ void SeamsEasyNode::attrChanged(MNodeMessage::AttributeMessage msg, MPlug &plug,
 
 	MFnDependencyNode fnNode(plug.node());
 	MPlugArray targets;
-	bool isConnected = fnNode.findPlug(aOutStitchLines, true).connectedTo(targets, false, true);
+	bool isConnected = fnNode.findPlug(aOutStitchLines, false).connectedTo(targets, false, true);
 
 	MDGModifier dgMod;
 	MDagModifier dagMod;
@@ -509,7 +510,7 @@ void SeamsEasyNode::attrChanged(MNodeMessage::AttributeMessage msg, MPlug &plug,
 				continue;
 
 			MPlugArray outMeshes;
-			fnStitchNode.findPlug(StitchEasyNode::aOutMesh, true).connectedTo(outMeshes, false, true);
+			fnStitchNode.findPlug(StitchEasyNode::aOutMesh, false).connectedTo(outMeshes, false, true);
 			for (unsigned int m = 0; m < outMeshes.length(); m++)
 				dagMod.deleteNode(outMeshes[m].node());
 
