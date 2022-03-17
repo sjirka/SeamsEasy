@@ -69,19 +69,22 @@ public:
 
 	MStatus queryAttrValue(MPlug& attrPlug);
 	MStatus setFlagAttr(MArgDatabase& argData, char *flag, MPlug& attrPlug);
+	MStatus AssignToShadingGroup(const MObject& shadingGroup, const MDagPath& dagPath, const MObject& component);
+	MStatus RemoveFromShadingGroup(const MObject& shadingGroup, const MDagPath& dagPath, const MObject& component);
 
 private:
 	MDGModifier m_dgMod;
 	MDagModifier m_dagMod;
 
 	bool m_isCreation;
-	bool m_isDoIt = false;
 	
-	MDagPath m_path;
-
 	MObject
-		m_intermediate,
+		m_shape,
 		m_node;
+
+	MObjectArray
+		m_groups,
+		m_comps;
 
 	std::map <char*, MObject> m_attrFlags{
 		{ THICKNESS_FLAG, SeamsEasyNode::aExtrudeThickness },

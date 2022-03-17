@@ -83,88 +83,67 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 		}
 
 		MObject component;
-		selection.getDagPath(0, m_path, component);
+		MDagPath srcPath;
+		selection.getDagPath(0, srcPath, component);
+		srcPath.extendToShape();
 		if (component.apiType() != MFn::kMeshEdgeComponent) {
 			displayError("Invalid selection. Select mesh edges and retry");
 			setResult(false);
 			return status;
 		}
 
-		MFnDagNode
-			fnMesh(m_path);
-		MPlug
-			pOutputMesh;
+		// Get information about shaders and set mesh as intermediate
+		MFnMesh fnSrcMesh(srcPath);
+		status = fnSrcMesh.getConnectedSetsAndMembers(srcPath.instanceNumber(), m_groups, m_comps, true);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+		status = m_dgMod.newPlugValueBool(fnSrcMesh.findPlug("intermediateObject", false), true);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MPlugArray incomingConnections;
-		bool connected = fnMesh.findPlug("inMesh", false).connectedTo(incomingConnections, true, false);
-		if(connected)
-			m_dgMod.disconnect(incomingConnections[0], fnMesh.findPlug("inMesh", false));
-
-		MIntArray tweakOutPoints;
-		int numTweaks = fnMesh.findPlug("pnts", false).getExistingArrayAttributeIndices(tweakOutPoints);
-
-		MObject tweakNode;
-		if (0<numTweaks) {
-			tweakNode = m_dgMod.createNode("polyTweak", &status);
-			CHECK_MSTATUS_AND_RETURN_IT(status);
-
-			MFnDependencyNode fnTweak(tweakNode, &status);
-			CHECK_MSTATUS_AND_RETURN_IT(status);
-			for (int t = 0; t < numTweaks; t++) {
-				MPlug
-					pTweakOutPoint = fnMesh.findPlug("pnts", false).elementByLogicalIndex(tweakOutPoints[t]),
-					pTweakInPoint = fnTweak.findPlug("tweak", false).elementByLogicalIndex(tweakOutPoints[t]);
-
-				for (unsigned int c = 0; c < pTweakOutPoint.numChildren(); c++) {
-					status = m_dgMod.newPlugValueFloat(pTweakInPoint.child(c), pTweakOutPoint.child(c).asFloat());
-					CHECK_MSTATUS_AND_RETURN_IT(status);
-				}
-
-				status = m_dgMod.removeMultiInstance(pTweakOutPoint, true);
-				CHECK_MSTATUS_AND_RETURN_IT(status);
-			}
-			pOutputMesh = fnTweak.findPlug("output", false);
-
-			if(connected)
-				m_dgMod.connect(incomingConnections[0], fnTweak.findPlug("inputPolymesh", false));
-		}
-		else if(connected)
-			pOutputMesh = incomingConnections[0];
-
+		// Create plugin node
 		m_node = m_dgMod.createNode(SeamsEasyNode::id, &status);
-		status = m_dgMod.doIt();
-			
-		if (!connected) {
-			MFnMesh fnIntermediate;
-			m_intermediate = fnIntermediate.copy(m_path.node(), m_path.transform());
-			fnIntermediate.setIntermediateObject(true);
-
-			if (!tweakNode.isNull()) {
-				MFnDependencyNode fnTweak(tweakNode);
-				m_dagMod.connect(fnIntermediate.findPlug("outMesh", false), fnTweak.findPlug("inputPolymesh", false));
-			}
-			else
-				pOutputMesh = fnIntermediate.findPlug("outMesh", false);
-		}
-
-	
-		// Create plugin node and make connections ////////////////////////////////////////////////
-
-		MFnDependencyNode
-			fnNode(m_node);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+		MFnDependencyNode fnNode(m_node);
 		fnNode.setName((name == "") ? "seamsEasy" : name);
 
-		status = m_dagMod.connect(pOutputMesh, fnNode.findPlug(SeamsEasyNode::aInMesh, false));
+		m_dgMod.doIt();
+
+		// Create output mesh under source mesh parent
+		srcPath.pop();
+		m_shape = m_dagMod.createNode("mesh", srcPath.node());
+		
+		MFnDagNode fnOutMesh(m_shape);
+		fnOutMesh.setName((name == "") ? "seamsEasyShape" : (name+"Shape"));
+
+		status = m_dagMod.connect(fnSrcMesh.findPlug("outMesh", false), fnNode.findPlug(SeamsEasyNode::aInMesh, false));
 		CHECK_MSTATUS_AND_RETURN_IT(status);
-		status = m_dagMod.connect(fnNode.findPlug(SeamsEasyNode::aOutMesh, false), fnMesh.findPlug("inMesh", false));
+		status = m_dagMod.connect(fnNode.findPlug(SeamsEasyNode::aOutMesh, false), fnOutMesh.findPlug("inMesh", false));
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
+		// Handle selected edges
 		MFnComponentListData compData;
 		MObject compList = compData.create();
 		compData.add(component);
 
 		status = m_dagMod.newPlugValue(fnNode.findPlug(SeamsEasyNode::aSelectedEdges, false), compList);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
+
+		m_dagMod.doIt();
+
+		MDagPath outPath;
+		status = fnOutMesh.getPath(outPath);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+
+		for (unsigned i = 0; i < m_groups.length(); i++) {
+			status = AssignToShadingGroup(m_groups[i], outPath, m_comps[i]);
+			CHECK_MSTATUS_AND_RETURN_IT(status);
+		}
+
+		MStringArray results;
+		results.append(fnNode.name());
+		results.append(fnOutMesh.name());
+		setResult(results);
+
+		MGlobal::select(m_shape, MGlobal::kReplaceList);
 	}
 
 	if (isQuery || isEdit) {
@@ -176,8 +155,8 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 		}
 	}
 
-	MFnDependencyNode fnNode(m_node, &status);
 	if (isQuery) {
+		MFnDependencyNode fnNode(m_node, &status);
 		for (auto &flag : m_attrFlags)
 			if (argData.isFlagSet(flag.first)) {
 				MPlug fs = fnNode.findPlug(flag.second, false);
@@ -186,6 +165,7 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 			}
 	}
 	else if (isEdit || m_isCreation) {
+		MFnDependencyNode fnNode(m_node, &status);
 		for (auto &flag : m_attrFlags){
 			if (argData.isFlagSet(flag.first)){
 				MPlug fs = fnNode.findPlug(flag.second, false);
@@ -251,9 +231,9 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 
 				for (unsigned int i = 0; i < offsetIndices.length(); i++) {
 					MPlug pOffsetElement = pOffset.elementByLogicalIndex(offsetIndices[i]);
-					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetDistance), (order == "asc") ? param->distance : rparam->distance);
-					m_dagMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetDepth), (order == "asc") ? param->depth : rparam->depth);
-					m_dagMod.newPlugValueBool(pOffsetElement.child(SeamsEasyNode::aOffsetStitch), (order == "asc") ? param->stitch : rparam->stitch);
+					m_dgMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetDistance), (order == "asc") ? param->distance : rparam->distance);
+					m_dgMod.newPlugValueFloat(pOffsetElement.child(SeamsEasyNode::aOffsetDepth), (order == "asc") ? param->depth : rparam->depth);
+					m_dgMod.newPlugValueBool(pOffsetElement.child(SeamsEasyNode::aOffsetStitch), (order == "asc") ? param->stitch : rparam->stitch);
 					param++; rparam++;
 				}
 			}
@@ -264,35 +244,38 @@ MStatus SeamsEasyCmd::doIt(const MArgList& args)
 			}
 		}
 	}
-
-	m_isDoIt = true;
-
-	return redoIt();
 }
 
 MStatus SeamsEasyCmd::redoIt()
 {
 	MStatus status;
 
-	if (m_isDoIt && !m_intermediate.isNull()) {
-		MFnDagNode
-			fnShape(m_path),
-			fnIntermediate(m_intermediate);
-
-		MGlobal::executeCommand("if(`isConnected  \"" + fnIntermediate.name() + ".outMesh\" \"" + fnShape.name() + ".inMesh\"`) disconnectAttr  \"" + fnIntermediate.name() + ".outMesh\" \"" + fnShape.name() + ".inMesh\";", false, false);
-	}
-
 	status = m_dgMod.doIt();
 	CHECK_MSTATUS_AND_RETURN_IT(status);
+
 	status = m_dagMod.doIt();
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	if (m_isCreation) {
-		MFnDependencyNode fnNode(m_node);
-		setResult(fnNode.name());
+	MFnDagNode fnOutMesh(m_shape);
+	MDagPath outPath;
+	status = fnOutMesh.getPath(outPath);
 
-		MGlobal::select(m_node, MGlobal::kReplaceList);
+	for (unsigned i = 0; i < m_groups.length(); i++) {
+		status = AssignToShadingGroup(m_groups[i], outPath, m_comps[i]);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
+
+	MStringArray results;
+
+	MFnDependencyNode fnNode(m_node);
+	results.append(fnNode.name());
+
+	MFnDagNode fnMesh(m_shape);
+	results.append(fnMesh.name());
+
+	setResult(results);
+
+	MGlobal::select(m_shape, MGlobal::kReplaceList);
 
 	return MS::kSuccess;
 }
@@ -301,20 +284,56 @@ MStatus SeamsEasyCmd::undoIt()
 {
 	MStatus status;
 
+	MFnDagNode fnOutMesh(m_shape);
+	MDagPath outPath;
+	status = fnOutMesh.getPath(outPath);
+
+	for (unsigned i = 0; i < m_groups.length(); i++) {
+		status = RemoveFromShadingGroup(m_groups[i], outPath, m_comps[i]);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+	}
+
 	status = m_dagMod.undoIt();
 	CHECK_MSTATUS_AND_RETURN_IT(status);
+	
 	status = m_dgMod.undoIt();
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	if (!m_intermediate.isNull()) {
-		MFnDagNode
-			fnShape(m_path),
-			fnIntermediate(m_intermediate);
+	return MS::kSuccess;
+}
 
-		MGlobal::executeCommand("connectAttr \"" + fnIntermediate.name() + ".outMesh\" \"" + fnShape.name() + ".inMesh\";", false, false);
+MStatus SeamsEasyCmd::AssignToShadingGroup(const MObject& shadingGroup, const MDagPath& dagPath, const MObject& component)
+{
+	MStatus status;
+	MFnSet fnSG(shadingGroup, &status);
+
+	if (fnSG.restriction() != MFnSet::kRenderableOnly)
+		return MS::kFailure;
+
+	status = fnSG.addMember(dagPath, component);
+	if (status != MS::kSuccess)
+	{
+		cerr << " ! MShadingGroup::assignToShadingGroup could not add Dag/Component to SG ! " << endl;
 	}
 
-	return MS::kSuccess;
+	return status;
+}
+
+MStatus SeamsEasyCmd::RemoveFromShadingGroup(const MObject& shadingGroup, const MDagPath& dagPath, const MObject& component)
+{
+	MStatus status;
+	MFnSet fnSG(shadingGroup, &status);
+
+	if (fnSG.restriction() != MFnSet::kRenderableOnly)
+		return MS::kFailure;
+
+	status = fnSG.removeMember(dagPath, component);
+	if (status != MS::kSuccess)
+	{
+		cerr << " ! MShadingGroup::assignToShadingGroup could not add Dag/Component to SG ! " << endl;
+	}
+
+	return status;
 }
 
 MStatus SeamsEasyCmd::queryAttrValue(MPlug& attrPlug) {
@@ -361,37 +380,37 @@ MStatus SeamsEasyCmd::setFlagAttr(MArgDatabase& argData, char *flag, MPlug& attr
 
 	if (attrPlug == SeamsEasyNode::aProfileMode) {
 		int value = argData.flagArgumentBool(flag, 0, &status);
-		status = m_dagMod.newPlugValueInt(attrPlug, value);
+		status = m_dgMod.newPlugValueInt(attrPlug, value);
 	}
 	else if (attrPlug == SeamsEasyNode::aHardEdgeAngle) {
 		MAngle value = argData.flagArgumentMAngle(flag, 0, &status);
-		status = m_dagMod.newPlugValueMAngle(attrPlug, value);
+		status = m_dgMod.newPlugValueMAngle(attrPlug, value);
 	}
 	else {
 		switch (type) {
 		case MFnNumericData::kBoolean: {
 			bool value = argData.flagArgumentBool(flag, 0, &status);
-			status = m_dagMod.newPlugValueBool(attrPlug, value);
+			status = m_dgMod.newPlugValueBool(attrPlug, value);
 			break; }
 		case MFnNumericData::kInt: {
 			int value = argData.flagArgumentInt(flag, 0, &status);
-			status = m_dagMod.newPlugValueInt(attrPlug, value);
+			status = m_dgMod.newPlugValueInt(attrPlug, value);
 			break; }
 		case MFnNumericData::kShort: {
 			short value = (short)argData.flagArgumentInt(flag, 0, &status);
-			status = m_dagMod.newPlugValueShort(attrPlug, value);
+			status = m_dgMod.newPlugValueShort(attrPlug, value);
 			break; }
 		case MFnNumericData::kFloat: {
 			float value = (float)argData.flagArgumentDouble(flag, 0, &status);
-			status = m_dagMod.newPlugValueFloat(attrPlug, value);
+			status = m_dgMod.newPlugValueFloat(attrPlug, value);
 			break; }
 		case MFnNumericData::kDouble: {
 			double value = argData.flagArgumentDouble(flag, 0, &status);
-			status = m_dagMod.newPlugValueDouble(attrPlug, value);
+			status = m_dgMod.newPlugValueDouble(attrPlug, value);
 			break; }
 		default: {
 			MDistance value = argData.flagArgumentMDistance(flag, 0, &status);
-			status = m_dagMod.newPlugValueMDistance(attrPlug, value);
+			status = m_dgMod.newPlugValueMDistance(attrPlug, value);
 			break; }
 		}
 	}
